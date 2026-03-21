@@ -8,7 +8,8 @@
 <meta name="apple-mobile-web-app-title" content="నిర్మాణం">
 <meta name="theme-color" content="#08090d">
 <title>నిర్మాణం Manager</title>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Telugu:wght@400;500;600;700&family=Noto+Serif+Telugu:wght@600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Telugu:wght@400;500;600;700&family=Noto+Serif+Telugu:wght@600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Telugu:wght@400;500;600;700&family=Noto+Serif+Telugu:wght@600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"></noscript>
 <style>
 /* ═══════════════════════════════════════
    DESIGN: Deep indigo-earth, warm amber
@@ -137,6 +138,7 @@ body{
 .fi::placeholder{color:var(--tx3)}
 .fi-mono{font-family:'JetBrains Mono';font-size:13px}
 .wiz-footer{padding:16px 22px 0;display:flex;gap:9px}
+.wiz-footer .btn{min-height:52px;font-size:15px;border-radius:12px}
 
 /* steps key visual */
 .key-steps{counter-reset:ks;list-style:none;margin-bottom:14px}
@@ -998,14 +1000,21 @@ function doGet(e) {
 const CFG_KEY = 'nirmanam_cfg_v2';
 const DATA_KEY = 'nirmanam_data_v2';
 
-function loadCfg() {
-  try { return JSON.parse(localStorage.getItem(CFG_KEY)) || {}; } catch(e){ return {}; }
-}
-function saveCfg(cfg) { localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); }
-function loadData() {
-  try { return JSON.parse(localStorage.getItem(DATA_KEY)) || mkFreshData(); } catch(e){ return mkFreshData(); }
-}
-function saveLocalData() { localStorage.setItem(DATA_KEY, JSON.stringify(state)); }
+// Safe storage wrapper — works even if localStorage is blocked (iPhone Files app)
+const STORE = (() => {
+  let mem = {};
+  let hasLS = false;
+  try { localStorage.setItem('_t','1'); localStorage.removeItem('_t'); hasLS = true; } catch(e){}
+  return {
+    get(k){ try{ if(hasLS) return JSON.parse(localStorage.getItem(k)); } catch(e){} return mem[k]||null; },
+    set(k,v){ try{ if(hasLS) localStorage.setItem(k,JSON.stringify(v)); } catch(e){} mem[k]=v; }
+  };
+})();
+
+function loadCfg() { try { return STORE.get(CFG_KEY) || {}; } catch(e){ return {}; } }
+function saveCfg(cfg) { try { STORE.set(CFG_KEY, cfg); } catch(e){} }
+function loadData() { try { return STORE.get(DATA_KEY) || mkFreshData(); } catch(e){ return mkFreshData(); } }
+function saveLocalData() { try { STORE.set(DATA_KEY, state); } catch(e){} }
 function mkFreshData() { return { entries:[], vendors:{}, priceHistory:{}, documents:[], nextId:1, chatHistory:[], lastSync:null }; }
 
 let cfg   = loadCfg();
@@ -1039,71 +1048,28 @@ function copyScript() {
   });
 }
 
-async function validateSheetAndNext() {
+function validateSheetAndNext() {
   const sheetId = document.getElementById('sheet-id').value.trim();
   const scriptUrl = document.getElementById('script-url').value.trim();
   if (!sheetId) { toast('Sheet ID enter చేయండి','err'); return; }
   if (!scriptUrl) { toast('Apps Script URL enter చేయండి','err'); return; }
-
-  showProc('Connection test చేస్తున్నాను...');
-  try {
-    const res = await fetch(scriptUrl, {
-      method:'POST',
-      body: JSON.stringify({ action:'ping', sheetId }),
-    });
-    const data = await res.json();
-    hideProc();
-    if (data.ok) {
-      cfg.sheetId = sheetId;
-      cfg.scriptUrl = scriptUrl;
-      saveCfg(cfg);
-      toast('✓ Google Sheet connected!','ok');
-      gotoStep(2);
-    } else {
-      toast('Connection failed: '+data.error,'err');
-    }
-  } catch(e) {
-    hideProc();
-    // If CORS error, still save and continue (Apps Script sometimes blocks preflight)
-    cfg.sheetId = sheetId;
-    cfg.scriptUrl = scriptUrl;
-    saveCfg(cfg);
-    toast('Saved! (Test connection on first use)','info');
-    gotoStep(2);
-  }
+  // Save and proceed — connection will be tested on first real sync
+  cfg.sheetId = sheetId;
+  cfg.scriptUrl = scriptUrl;
+  saveCfg(cfg);
+  toast('✓ Saved! Next step కి వెళ్తున్నాం...','ok');
+  setTimeout(() => gotoStep(2), 800);
 }
 
-async function finishSetup() {
+function finishSetup() {
   const key = document.getElementById('gemini-key').value.trim();
   if (!key) { toast('Gemini API key enter చేయండి','err'); return; }
-  if (!key.startsWith('AIza')) { toast('Valid Gemini key enter చేయండి (AIza తో start అవుతుంది)','err'); return; }
-
-  showProc('AI test చేస్తున్నాను...');
-  // Quick test Gemini key
-  try {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`,{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({contents:[{parts:[{text:'Reply only: OK'}]}]})
-    });
-    const d = await r.json();
-    hideProc();
-    if (d.candidates) {
-      cfg.geminiKey = key;
-      cfg.setupDone = true;
-      saveCfg(cfg);
-      launchApp();
-    } else {
-      toast('API key invalid: '+(d.error?.message||'unknown error'),'err');
-    }
-  } catch(e) {
-    hideProc();
-    toast('Network error. Key save చేస్తున్నాను...','info');
-    cfg.geminiKey = key;
-    cfg.setupDone = true;
-    saveCfg(cfg);
-    setTimeout(launchApp, 1000);
-  }
+  if (!key.startsWith('AIza')) { toast('AIza తో start అయ్యే key enter చేయండి','err'); return; }
+  cfg.geminiKey = key;
+  cfg.setupDone = true;
+  saveCfg(cfg);
+  toast('✓ Setup complete! App లోడ్ అవుతోంది...','ok');
+  setTimeout(launchApp, 800);
 }
 
 function launchApp() {
@@ -1771,52 +1737,69 @@ function fileToB64(file){
 // ═══════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════
+function showSetup() {
+  const setupEl = document.getElementById('setup');
+  setupEl.style.display = 'flex';
+  setupEl.style.opacity = '0';
+  setTimeout(() => { setupEl.style.opacity = '1'; }, 50);
+}
+
+function showApp() {
+  const appEl = document.getElementById('app');
+  appEl.style.opacity = '1';
+  appEl.style.pointerEvents = 'all';
+  appEl.classList.add('visible');
+  try { refreshUI(); } catch(e){}
+  try { renderDocList(); } catch(e){}
+  try { injectWelcomeMsg(); } catch(e){}
+  try { updateSettingsUI(); } catch(e){}
+  try { syncFromSheet(); } catch(e){}
+  try {
+    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const isAndroid = /android/i.test(navigator.userAgent);
+    const isStandalone = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
+    if ((isIOS || isAndroid) && !isStandalone) {
+      document.getElementById('install-banner').style.display = 'flex';
+    }
+  } catch(e){}
+  setInterval(() => { try{ syncFromSheet(); }catch(e){} }, 5 * 60 * 1000);
+}
+
 function init() {
+  // Make sure setup is hidden at start
   const setupEl = document.getElementById('setup');
   const splashEl = document.getElementById('splash');
   const appEl = document.getElementById('app');
-
-  // Hide setup and app initially — only splash shows
   setupEl.style.display = 'none';
-  appEl.style.opacity = '0';
-  appEl.style.pointerEvents = 'none';
+  setupEl.style.opacity = '0';
 
-  // After splash animation finishes (2.2s bar + 0.3s buffer)
+  // Splash bar is 2.2s — wait 2.6s then transition
   setTimeout(() => {
-    // Fade out splash
-    splashEl.classList.add('out');
-
+    splashEl.style.transition = 'opacity 0.6s';
+    splashEl.style.opacity = '0';
     setTimeout(() => {
       splashEl.style.display = 'none';
-
-      if (cfg.setupDone && cfg.sheetId && cfg.geminiKey) {
-        // Already configured — go straight to app
-        appEl.style.opacity = '1';
-        appEl.style.pointerEvents = 'all';
-        appEl.classList.add('visible');
-        refreshUI();
-        renderDocList();
-        injectWelcomeMsg();
-        updateSettingsUI();
-        syncFromSheet();
-        // Install banner
-        const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-        const isAndroid = /android/i.test(navigator.userAgent);
-        const isStandalone = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
-        if ((isIOS || isAndroid) && !isStandalone) {
-          document.getElementById('install-banner').style.display = 'flex';
-        }
-        setInterval(syncFromSheet, 5 * 60 * 1000);
+      // Decide: setup or app?
+      if (cfg && cfg.setupDone && cfg.sheetId && cfg.geminiKey) {
+        showApp();
       } else {
-        // First launch — show setup wizard
-        setupEl.style.display = 'flex';
-        // Small delay so the flex display kicks in before transition
-        setTimeout(() => { setupEl.style.opacity = '1'; }, 30);
+        showSetup();
       }
-    }, 700); // wait for splash fade out
-
-  }, 2500); // splash bar animation duration
+    }, 650);
+  }, 2600);
 }
+
+// Global error safety net — prevents silent crash on iPhone
+window.onerror = function(msg, src, line) {
+  console.log('Error:', msg, line);
+  // If splash still showing after error, force show setup
+  const splash = document.getElementById('splash');
+  if (splash && splash.style.display !== 'none' && !splash.classList.contains('out')) {
+    splash.style.display = 'none';
+    showSetup();
+  }
+  return true;
+};
 
 init();
 </script>
