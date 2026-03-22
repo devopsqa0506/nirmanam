@@ -2222,7 +2222,7 @@ async function handlePhoto(e, source) {
     var fileSizeMB = (b64.length * 0.75) / (1024 * 1024);
     console.log('File size for Drive upload:', fileSizeMB.toFixed(2), 'MB');
     if (fileSizeMB <= 8) {
-      saveToDrive(b64, file.type, file.name, result.docType||'Other', result);
+      compressAndUpload(file, result.docType||'Other', result);
     } else {
       toast('📄 AI scan complete! Drive upload skip — file ' + fileSizeMB.toFixed(0) + 'MB (max 8MB). ilovepdf.com లో compress చేసి re-upload చేయండి.', 'info');
     }
