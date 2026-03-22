@@ -534,8 +534,12 @@ body{background:var(--bg);color:var(--tx);font-family:'Noto Sans Telugu',sans-se
         Google's free AI — Day కి 1500 requests free. Telugu documents చదవగలదు.
       </div>
     </div>
-    <div class="wiz-footer">
-      <button class="btn amb full" onclick="gotoStep(1)">Setup Start చేద్దాం →</button>
+    <div class="wiz-footer" style="flex-direction:column;gap:9px">
+      <button class="btn teal full" onclick="scanQRSetup()">📲 Scan QR — Instant Setup</button>
+      <button class="btn amb full" onclick="gotoStep(1)">Manual Setup →</button>
+    </div>
+    <div style="text-align:center;font-size:12px;color:var(--tx3);padding:10px 20px 0">
+      పాత phone లో QR generate చేసి ఉంటే — "Scan QR" tap చేయండి
     </div>
   </div>
 
@@ -792,6 +796,14 @@ body{background:var(--bg);color:var(--tx);font-family:'Noto Sans Telugu',sans-se
         <div class="si"><div class="si-ico">🤖</div><div class="si-body"><div class="si-t">Gemini AI Keys</div><div class="si-s">Free — 15 req/min per key. Multiple keys = more quota</div><div class="si-v" id="cfg-ai">Not configured</div></div><button class="btn ghost sm" onclick="openModal('manage-keys')">Manage</button></div>
         <div class="si"><div class="si-ico">☁️</div><div class="si-body"><div class="si-t">Sync Status</div><div class="si-s" id="cfg-sync">Last sync: Never</div></div><button class="btn ghost sm" onclick="syncNow()">Sync</button></div>
         <div class="si"><div class="si-ico">📱</div><div class="si-body"><div class="si-t">New Phone Setup</div><div class="si-s">Same Sheet ID + Gemini Key enter చేయండి</div></div><button class="btn ghost sm" onclick="showGuide()">Guide</button></div>
+        <div class="si" style="border-color:rgba(58,232,200,0.3);background:rgba(58,232,200,0.03)">
+          <div class="si-ico">📲</div>
+          <div class="si-body">
+            <div class="si-t" style="color:var(--teal)">QR Code Transfer</div>
+            <div class="si-s">New phone లో scan చేస్తే — all keys instant setup!</div>
+          </div>
+          <button class="btn teal sm" onclick="generateQR()">Generate QR</button>
+        </div>
         <div style="height:1px;background:var(--bd);margin:10px 0 14px"></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:9px">
           <button class="btn rose sm full" onclick="clearDocs()">🗑️ Clear Docs</button>
@@ -1042,6 +1054,54 @@ body{background:var(--bg);color:var(--tx);font-family:'Noto Sans Telugu',sans-se
   </div>
 </div>
 
+<!-- QR Code Modal -->
+<div class="mover" id="qr-modal">
+  <div class="msheet">
+    <div class="mgrip"></div>
+    <div class="mt" id="qr-modal-title">📲 Setup QR Code</div>
+
+    <!-- QR Display mode -->
+    <div id="qr-show-section">
+      <div style="font-size:13px;color:var(--tx2);margin-bottom:14px;line-height:1.7">
+        ఈ QR code screenshot తీసి Google Drive లో save చేయండి.<br>
+        New phone లో "Scan QR" tap చేసి scan చేయండి — all keys automatic!
+      </div>
+      <div style="background:white;border-radius:13px;padding:16px;margin-bottom:14px;display:flex;align-items:center;justify-content:center">
+        <canvas id="qr-canvas" width="220" height="220"></canvas>
+      </div>
+      <div style="background:rgba(232,184,74,0.08);border:1px solid rgba(232,184,74,0.25);border-radius:9px;padding:11px 13px;font-size:12px;color:var(--amb);line-height:1.7;margin-bottom:14px">
+        <b style="display:block;margin-bottom:3px">⚠️ Security Note</b>
+        ఈ QR లో మీ API keys ఉన్నాయి. Screenshot trusted లో మాత్రమే share చేయండి. Google Drive personal folder లో save చేయండి.
+      </div>
+      <div style="display:flex;gap:9px">
+        <button class="btn ghost full" onclick="closeModal('qr-modal')">Close</button>
+        <button class="btn amb full" onclick="saveQRImage()">📸 Save as Image</button>
+      </div>
+      <div style="margin-top:12px;text-align:center">
+        <button onclick="showQRScanner()" style="background:none;border:none;color:var(--teal);font-size:13px;cursor:pointer;text-decoration:underline">
+          New phone లో ఉన్నారా? → Scan QR
+        </button>
+      </div>
+    </div>
+
+    <!-- QR Scan mode -->
+    <div id="qr-scan-section" style="display:none">
+      <div style="font-size:13px;color:var(--tx2);margin-bottom:14px;line-height:1.7">
+        Camera తో QR code scan చేయండి — పాత phone నుండి generate చేసిన QR.
+      </div>
+      <div style="position:relative;border-radius:13px;overflow:hidden;background:#000;margin-bottom:14px">
+        <video id="qr-video" style="width:100%;border-radius:13px" autoplay playsinline></video>
+        <div style="position:absolute;inset:0;border:2px solid var(--teal);border-radius:13px;pointer-events:none;opacity:0.5"></div>
+        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:160px;height:160px;border:2px solid var(--teal);border-radius:8px;pointer-events:none"></div>
+      </div>
+      <div id="qr-scan-status" style="text-align:center;font-size:13px;color:var(--tx2);margin-bottom:14px">
+        Camera లో QR code చూపించండి...
+      </div>
+      <button class="btn ghost full" onclick="stopQRScan();closeModal('qr-modal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- Apps Script Code Modal -->
 <div class="mover" id="script-modal">
   <div class="msheet">
@@ -1142,42 +1202,9 @@ function freshData(){ return {entries:[],vendors:{},priceHistory:{},documents:[]
 // HARDCODED CONFIG — Private repo లో safe గా ఉంటుంది
 // New phone లో automatically loaded అవుతుంది
 // ════════════════════════════════════════════════════════
-var HARDCODED_CONFIG = {
-  sheetId:    '13Nk9DKYCcL4PND9wZnBlLB_O2eo2pNa6lG914oU2HAU',        // ← మీ Google Sheet ID ఇక్కడ paste చేయండి
-  scriptUrl:  'https://script.google.com/macros/s/AKfycbwwQ2HN6OI3hbyu4mfKBY_o6QUgEGsQTKfk_CZwK9WCOpgOmF7kg6aV8NgbhUToMMPx/exec',        // ← మీ Apps Script URL ఇక్కడ paste చేయండి
-  setupDone:  true,      // ← true గా ఉంచండి — setup wizard skip అవుతుంది
-
-  // Multiple Gemini API Keys — different Gmail accounts నుండి తీసుకోండి
-  // App automatically rotate చేస్తుంది — quota never ends!
-  // Example:
-  // geminiKeys: [
-  //   { key: 'AIzaSy...key1...', label: 'Gmail1' },
-  //   { key: 'AIzaSy...key2...', label: 'Gmail2' },
-  //   { key: 'AIzaSy...key3...', label: 'Gmail3' }
-  // ]
-  geminiKeys: [
-    // మీ keys ఇక్కడ add చేయండి ↓
-     { key: 'AIzaSyAa8MxcCxmy7qb8bfarhtrbCsHA9S5xEtk', label: 'Indian0506' },
-     { key: 'AIzaSyBIdmkaYSb08sHm18H6hVcXsVaT623daso', label: 'Vasuseen' },
-     { key: 'AIzaSyD9uTBk0aQrCLU8AJ3FFzuSA9DJ0-EP3Is', label: 'Sree0506' }
-  ]
-};
-
-function mergeHardcodedConfig(c) {
-  if (HARDCODED_CONFIG.sheetId)   c.sheetId   = HARDCODED_CONFIG.sheetId;
-  if (HARDCODED_CONFIG.scriptUrl) c.scriptUrl = HARDCODED_CONFIG.scriptUrl;
-  if (HARDCODED_CONFIG.setupDone) c.setupDone = true;
-
-  // Multiple keys — merge into cfg.apiKeys array
-  if (HARDCODED_CONFIG.geminiKeys && HARDCODED_CONFIG.geminiKeys.length > 0) {
-    c.apiKeys = HARDCODED_CONFIG.geminiKeys.map(function(k){
-      return { key: k.key, label: k.label||'Key', addedDate: 'hardcoded' };
-    });
-    c.geminiKey = HARDCODED_CONFIG.geminiKeys[0].key; // primary key
-    c.keyRotateIdx = 0;
-  }
-  return c;
-}
+// No hardcoded config — keys stored in localStorage only (secure)
+// Use QR code to transfer keys between phones
+function mergeHardcodedConfig(c) { return c; }
 
 var cfg   = mergeHardcodedConfig(loadCfg());
 var state = loadData();
@@ -2859,6 +2886,147 @@ function deleteContact(el) { var id = el.dataset.cid;
   saveData(); renderContacts(); toast('Contact deleted', 'ok');
 }
 
+
+// ════════════════════════════════════════════════════════
+// QR CODE — GENERATE & SCAN
+// ════════════════════════════════════════════════════════
+var _qrScanStream = null;
+var _qrScanInterval = null;
+
+function generateQR() {
+  if (!cfg.sheetId && !cfg.geminiKey) {
+    toast('Settings configure చేయండి first', 'err');
+    return;
+  }
+  // Build config object to encode
+  var qrData = {
+    v: 1, // version
+    s: cfg.sheetId || '',
+    u: cfg.scriptUrl || '',
+    k: cfg.geminiKey || '',
+    ks: (cfg.apiKeys||[]).map(function(k){ return {k:k.key, l:k.label}; })
+  };
+  var encoded = btoa(JSON.stringify(qrData));
+  var qrText = 'NIRMIT:' + encoded;
+
+  document.getElementById('qr-show-section').style.display = 'block';
+  document.getElementById('qr-scan-section').style.display = 'none';
+  document.getElementById('qr-modal-title').textContent = '📲 Setup QR Code';
+  openModal('qr-modal');
+
+  // Generate QR using qrcode.js library
+  setTimeout(function(){
+    var canvas = document.getElementById('qr-canvas');
+    if (typeof QRCode !== 'undefined') {
+      QRCode.toCanvas(canvas, qrText, {
+        width: 220, margin: 2,
+        color: { dark: '#000000', light: '#ffffff' }
+      }, function(err){ if(err) toast('QR generate failed: '+err,'err'); });
+    } else {
+      // Fallback: load QRCode library dynamically
+      var script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
+      script.onload = function(){
+        QRCode.toCanvas(canvas, qrText, {
+          width: 220, margin: 2,
+          color: { dark: '#000000', light: '#ffffff' }
+        }, function(err){ if(err) toast('QR generate failed','err'); });
+      };
+      document.head.appendChild(script);
+    }
+  }, 300);
+}
+
+function saveQRImage() {
+  var canvas = document.getElementById('qr-canvas');
+  var link = document.createElement('a');
+  link.download = 'Nirmit_Setup_QR_' + today().replace(/ /g,'-') + '.png';
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+  toast('QR Image saved! Google Drive లో upload చేయండి', 'ok');
+}
+
+function showQRScanner() {
+  document.getElementById('qr-show-section').style.display = 'none';
+  document.getElementById('qr-scan-section').style.display = 'block';
+  document.getElementById('qr-modal-title').textContent = '📷 Scan QR Code';
+  startQRScan();
+}
+
+function startQRScan() {
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+    .then(function(stream){
+      _qrScanStream = stream;
+      var video = document.getElementById('qr-video');
+      video.srcObject = stream;
+      video.play();
+
+      // Load jsQR for decoding
+      var script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jsqr/1.4.0/jsQR.js';
+      script.onload = function(){ startQRDecode(); };
+      document.head.appendChild(script);
+    })
+    .catch(function(err){
+      document.getElementById('qr-scan-status').textContent = 'Camera access denied. Settings లో allow చేయండి.';
+    });
+}
+
+function startQRDecode() {
+  var video = document.getElementById('qr-video');
+  var statusEl = document.getElementById('qr-scan-status');
+  var scanCanvas = document.createElement('canvas');
+  var scanCtx = scanCanvas.getContext('2d');
+
+  _qrScanInterval = setInterval(function(){
+    if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
+    scanCanvas.width  = video.videoWidth;
+    scanCanvas.height = video.videoHeight;
+    scanCtx.drawImage(video, 0, 0);
+    var imageData = scanCtx.getImageData(0, 0, scanCanvas.width, scanCanvas.height);
+    var code = jsQR(imageData.data, imageData.width, imageData.height);
+    if (code && code.data && code.data.startsWith('NIRMIT:')) {
+      stopQRScan();
+      applyQRConfig(code.data);
+    }
+  }, 500);
+}
+
+function stopQRScan() {
+  clearInterval(_qrScanInterval);
+  if (_qrScanStream) {
+    _qrScanStream.getTracks().forEach(function(t){ t.stop(); });
+    _qrScanStream = null;
+  }
+}
+
+function applyQRConfig(qrText) {
+  try {
+    var encoded = qrText.replace('NIRMIT:', '');
+    var data = JSON.parse(atob(encoded));
+    if (data.s) cfg.sheetId   = data.s;
+    if (data.u) cfg.scriptUrl = data.u;
+    if (data.k) cfg.geminiKey = data.k;
+    if (data.ks && data.ks.length) {
+      cfg.apiKeys = data.ks.map(function(k){ return {key:k.k, label:k.l||'Key', addedDate:today()}; });
+      cfg.geminiKey = data.ks[0].k;
+    }
+    cfg.setupDone = true;
+    saveCfg();
+    closeModal('qr-modal');
+    updateSettingsUI();
+    toast('✓ Setup complete! All keys loaded from QR', 'ok');
+    setTimeout(function(){ launchApp(); }, 500);
+  } catch(e) {
+    document.getElementById('qr-scan-status').textContent = 'Invalid QR code. Nirmit QR మాత్రమే scan చేయండి.';
+  }
+}
+
+// Also show scan QR on setup wizard for new phones
+function scanQRSetup() {
+  openModal('qr-modal');
+  showQRScanner();
+}
 
 // ════════════════════════════════════════════════════════
 // NAVIGATION
