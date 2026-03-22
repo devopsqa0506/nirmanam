@@ -928,11 +928,79 @@ body{background:var(--bg);color:var(--tx);font-family:'Noto Sans Telugu',sans-se
   </div>
 </div>
 
+<!-- Apps Script Code Modal -->
+<div class="mover" id="script-modal">
+  <div class="msheet">
+    <div class="mgrip"></div>
+    <div class="mt">📋 Apps Script Code</div>
+    <div style="font-size:13px;color:var(--tx2);margin-bottom:10px;line-height:1.6">
+      ఈ code అన్నీ select చేసి copy చేయండి → Apps Script లో paste చేయండి
+    </div>
+    <textarea id="script-code-area"
+      style="width:100%;height:220px;background:var(--s3);border:1px solid var(--bd);
+      border-radius:10px;padding:12px;color:var(--teal);font-family:JetBrains Mono,monospace;
+      font-size:11px;resize:none;outline:none;line-height:1.5"
+      readonly onclick="this.select();this.setSelectionRange(0,99999)"></textarea>
+    <div style="display:flex;gap:9px;margin-top:12px">
+      <button class="btn ghost full" onclick="closeModal('script-modal')">Close</button>
+      <button class="btn amb full" onclick="copyScriptFromModal()">📋 Copy Code</button>
+    </div>
+    <div style="margin-top:12px;background:var(--s2);border:1px solid var(--bd);border-radius:10px;padding:12px;font-size:12px;color:var(--tx2);line-height:1.7">
+      <b style="color:var(--amb);display:block;margin-bottom:5px">Steps:</b>
+      1. Above code Copy చేయండి<br>
+      2. Google Sheets → Extensions → Apps Script<br>
+      3. అక్కడ ఉన్న code అన్నీ Delete చేయండి<br>
+      4. Paste చేయండి → Save (Ctrl+S)<br>
+      5. Deploy → Manage deployments → Edit → New version → Deploy
+    </div>
+  </div>
+</div>
+
 <script>
 // ════════════════════════════════════════════════════════
 // APPS SCRIPT CODE
 // ════════════════════════════════════════════════════════
-var APPS_SCRIPT_CODE = 'function doPost(e){try{var data=JSON.parse(e.postData.contents);var ss=SpreadsheetApp.openById(data.sheetId);var action=data.action;if(action==="append"){var sheet=ss.getSheetByName(data.sheetName)||ss.insertSheet(data.sheetName);if(sheet.getLastRow()===0)sheet.appendRow(data.headers);sheet.appendRow(data.row);return ContentService.createTextOutput(JSON.stringify({ok:true})).setMimeType(ContentService.MimeType.JSON);}if(action==="readAll"){var result={};["Entries","Vendors","Prices","Documents"].forEach(function(name){var sh=ss.getSheetByName(name);result[name]=sh&&sh.getLastRow()>1?sh.getDataRange().getValues():[];});return ContentService.createTextOutput(JSON.stringify({ok:true,data:result})).setMimeType(ContentService.MimeType.JSON);}if(action==="ping"){return ContentService.createTextOutput(JSON.stringify({ok:true})).setMimeType(ContentService.MimeType.JSON);}}catch(err){return ContentService.createTextOutput(JSON.stringify({ok:false,error:err.toString()})).setMimeType(ContentService.MimeType.JSON);}}function doGet(e){return ContentService.createTextOutput(JSON.stringify({ok:true,msg:"Nirmit API"})).setMimeType(ContentService.MimeType.JSON);}';
+var APPS_SCRIPT_CODE = [
+  'function doPost(e) {',
+  '  try {',
+  '    var data = JSON.parse(e.postData.contents);',
+  '    var ss = SpreadsheetApp.openById(data.sheetId);',
+  '    var action = data.action;',
+  '',
+  '    if (action === "append") {',
+  '      var sheet = ss.getSheetByName(data.sheetName) || ss.insertSheet(data.sheetName);',
+  '      if (sheet.getLastRow() === 0) sheet.appendRow(data.headers);',
+  '      sheet.appendRow(data.row);',
+  '      return ContentService.createTextOutput(JSON.stringify({ok: true}))',
+  '        .setMimeType(ContentService.MimeType.JSON);',
+  '    }',
+  '',
+  '    if (action === "readAll") {',
+  '      var result = {};',
+  '      ["Entries","Vendors","Prices","Documents","Contacts","Projects"].forEach(function(name) {',
+  '        var sh = ss.getSheetByName(name);',
+  '        result[name] = (sh && sh.getLastRow() > 1) ? sh.getDataRange().getValues() : [];',
+  '      });',
+  '      return ContentService.createTextOutput(JSON.stringify({ok: true, data: result}))',
+  '        .setMimeType(ContentService.MimeType.JSON);',
+  '    }',
+  '',
+  '    if (action === "ping") {',
+  '      return ContentService.createTextOutput(JSON.stringify({ok: true}))',
+  '        .setMimeType(ContentService.MimeType.JSON);',
+  '    }',
+  '',
+  '  } catch(err) {',
+  '    return ContentService.createTextOutput(JSON.stringify({ok: false, error: err.toString()}))',
+  '      .setMimeType(ContentService.MimeType.JSON);',
+  '  }',
+  '}',
+  '',
+  'function doGet(e) {',
+  '  return ContentService.createTextOutput(JSON.stringify({ok: true, msg: "Nirmit API"}))',
+  '    .setMimeType(ContentService.MimeType.JSON);',
+  '}'
+].join('\n');
 
 // ════════════════════════════════════════════════════════
 // STORAGE — safe wrapper (works even if localStorage blocked)
@@ -1006,16 +1074,36 @@ function gotoStep(n) {
 }
 
 function copyScript() {
+  // Show the script in a visible popup so user can copy manually if clipboard fails
+  openModal('script-modal');
+  document.getElementById('script-code-area').value = APPS_SCRIPT_CODE;
+  // Also try clipboard
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(APPS_SCRIPT_CODE).then(function(){
+        toast('Code copied to clipboard!', 'ok');
+      }).catch(function(){
+        toast('Code shown below — manually select & copy', 'info');
+      });
+    } else {
+      toast('Code shown below — Select All & Copy', 'info');
+    }
+  } catch(e) {
+    toast('Code shown below — Select All & Copy', 'info');
+  }
+}
+
+function copyScriptFromModal() {
+  var ta = document.getElementById('script-code-area');
+  ta.select();
+  ta.setSelectionRange(0, 99999);
   try {
     navigator.clipboard.writeText(APPS_SCRIPT_CODE).then(function(){
-      toast('Script copied! Apps Script లో paste చేయండి', 'ok');
+      toast('Copied!', 'ok');
     });
   } catch(e) {
-    var ta = document.createElement('textarea');
-    ta.value = APPS_SCRIPT_CODE;
-    document.body.appendChild(ta); ta.select();
-    document.execCommand('copy'); document.body.removeChild(ta);
-    toast('Script copied!', 'ok');
+    document.execCommand('copy');
+    toast('Copied!', 'ok');
   }
 }
 
@@ -1113,20 +1201,58 @@ function syncFromSheet() {
 }
 
 function mergeSheetData(sheetData) {
-  if (!sheetData.Entries || sheetData.Entries.length < 2) return;
-  var hdrs = sheetData.Entries[0];
-  var rows = sheetData.Entries.slice(1);
-  var localIds = new Set(state.entries.map(function(e){ return e.id; }));
-  rows.forEach(function(r){
-    var obj = {};
-    hdrs.forEach(function(h,i){ obj[h]=r[i]; });
-    if (!localIds.has(obj.id)) {
-      state.entries.push(obj);
-      ensureVendor(obj.vendor, obj.category);
-      if (obj.type==='order')   state.vendors[obj.vendor].totalOrdered = (state.vendors[obj.vendor].totalOrdered||0)+Number(obj.amount||0);
-      if (obj.type==='payment') state.vendors[obj.vendor].totalPaid    = (state.vendors[obj.vendor].totalPaid||0)   +Number(obj.amount||0);
-    }
-  });
+  // Merge Entries
+  if (sheetData.Entries && sheetData.Entries.length > 1) {
+    var hdrs = sheetData.Entries[0];
+    var rows = sheetData.Entries.slice(1);
+    var localIds = new Set(state.entries.map(function(e){ return e.id; }));
+    rows.forEach(function(r){
+      var obj = {};
+      hdrs.forEach(function(h,i){ obj[h]=r[i]; });
+      if (!localIds.has(obj.id)) {
+        state.entries.push(obj);
+        ensureVendor(obj.vendor, obj.category);
+        if (obj.type==='order')   state.vendors[obj.vendor].totalOrdered = (state.vendors[obj.vendor].totalOrdered||0)+Number(obj.amount||0);
+        if (obj.type==='payment') state.vendors[obj.vendor].totalPaid    = (state.vendors[obj.vendor].totalPaid||0)   +Number(obj.amount||0);
+      }
+    });
+  }
+
+  // Merge Contacts — restore on new phone
+  if (sheetData.Contacts && sheetData.Contacts.length > 1) {
+    var cHdrs = sheetData.Contacts[0];
+    var cRows = sheetData.Contacts.slice(1);
+    if (!state.contacts) state.contacts = [];
+    var localCIds = new Set(state.contacts.map(function(c){ return c.id; }));
+    cRows.forEach(function(r){
+      var obj = {};
+      cHdrs.forEach(function(h,i){ obj[h]=r[i]; });
+      if (obj.id && !localCIds.has(obj.id)) {
+        state.contacts.push(obj);
+      }
+    });
+    renderContacts();
+  }
+
+  // Merge Projects — restore on new phone
+  if (sheetData.Projects && sheetData.Projects.length > 1) {
+    var pHdrs = sheetData.Projects[0];
+    var pRows = sheetData.Projects.slice(1);
+    if (!state.projects) state.projects = [];
+    var localPIds = new Set(state.projects.map(function(p){ return p.id; }));
+    pRows.forEach(function(r){
+      var obj = {};
+      pHdrs.forEach(function(h,i){ obj[h]=r[i]; });
+      if (obj.id && !localPIds.has(obj.id)) {
+        // Restore project with empty houses array if not present
+        if (!obj.houses) obj.houses = [];
+        if (!obj.agreements) obj.agreements = [];
+        state.projects.push(obj);
+      }
+    });
+    renderProjects();
+  }
+
   refreshUI();
 }
 
@@ -1149,11 +1275,47 @@ function addEntry(entry) {
   } else if (entry.type === 'payment') {
     state.vendors[entry.vendor].totalPaid = (state.vendors[entry.vendor].totalPaid||0) + Number(entry.amount||0);
   }
+  // Auto-add vendor to contacts if phone number present
+  if (entry.phone && entry.vendor) {
+    autoAddVendorContact(entry.vendor, entry.phone, entry.category, entry.description, entry.date);
+  }
   saveData(); refreshUI();
   pushToSheet('Entries',
     ['id','date','type','vendor','category','amount','description','unitPrice','priceKey'],
     [entry.id,entry.date,entry.type,entry.vendor,entry.category,entry.amount,entry.description||'',entry.unitPrice||'',entry.priceKey||'']
   );
+}
+
+function autoAddVendorContact(name, phone, category, notes, date) {
+  if (!state.contacts) state.contacts = [];
+  // Check if already exists by name or phone
+  var exists = state.contacts.find(function(c){
+    return c.name.toLowerCase()===name.toLowerCase() || (phone && c.phone===phone);
+  });
+  if (exists) {
+    // Update phone if missing
+    if (phone && !exists.phone) { exists.phone = phone; saveData(); renderContacts(); }
+    return;
+  }
+  var newContact = {
+    id: 'con_'+Date.now(),
+    name: name,
+    phone: phone || '',
+    role: 'vendor',
+    address: '',
+    notes: (category||'') + (notes?' · '+notes.substring(0,60):'') + (date?' · '+date:''),
+    addedDate: date || today(),
+    autoAdded: true
+  };
+  state.contacts.push(newContact);
+  saveData();
+  renderContacts();
+  // Push to Google Sheet
+  pushToSheet('Contacts',
+    ['id','name','phone','role','address','notes','addedDate'],
+    [newContact.id, newContact.name, newContact.phone, newContact.role, newContact.address, newContact.notes, newContact.addedDate]
+  );
+  toast(name + ' Contacts లో add అయ్యారు', 'ok');
 }
 
 // ════════════════════════════════════════════════════════
@@ -1224,7 +1386,10 @@ function renderVendors() {
       +'</div>'
       +'<div class="vc-bar"><div class="vc-bf" style="width:'+pct+'%;background:'+(bal>0?'var(--rose)':'var(--teal)')+'"></div></div>'
       +'<div class="vc-nums"><span>Ordered: '+rup(v.totalOrdered)+'</span><span>Paid: '+rup(v.totalPaid)+'</span></div>'
-      +(v.phone?'<button class="btn ghost sm" style="margin-top:9px;width:100%" onclick="window.location=\'tel:'+v.phone+'\'">📞 Call '+escH(name)+'</button>':'')
+      +(v.phone?'<div style="display:flex;gap:8px;margin-top:9px">'
+        +'<a href="tel:'+v.phone+'" class="btn ghost sm" style="flex:1;text-decoration:none;color:var(--teal);border-color:rgba(58,232,200,0.3);font-size:12px">📞 Call</a>'
+        +'<a href="https://wa.me/91'+v.phone.replace(/[^0-9]/g,'')+'" target="_blank" class="btn ghost sm" style="flex:1;text-decoration:none;color:#25D366;border-color:rgba(37,211,102,0.4);font-size:12px">💬 WhatsApp</a>'
+        +'</div>':'')
     +'</div>';
   }).join('');
 }
@@ -1601,7 +1766,7 @@ var DOC_PROMPT = 'You are a specialist reading Andhra Pradesh property documents
   +'DATE RULE: documentDate = date in FIRST LINE of this document (tedi: DD.MM.YYYY or Telugu words for date). NEVER use a previous owners purchase date. NEVER use todays date.\n\n'
   +'FINANCIALS: saleAmount=consideration amount. stampDuty=tax (small). registrationFee=fee (small). totalInvestment=saleAmount+stampDuty+registrationFee. totalRegistrationCost=stampDuty+regFee only (NEVER equals saleAmount).\n\n'
   +'PROPERTY TYPE: gruha vikrayam/house/building=House. Plot/site=Plot. Agricultural=Agricultural. Land only=Land. pricePerCent: only for Land/Plot/Agricultural, null for House.\n\n'
-  +'FIELDS TO EXTRACT (extract all visible): Document Number, Registration Date, Property Type, Transaction Type, Sub-Registrar Office, District, Mandal, Village/Locality, Ward Number, Door Number, Survey Number, Land Extent (MUST show sq yards AND cents both), Built-up Area (sq feet), Seller Full Name, Seller Address, Buyer Full Name, Buyer Address, Sale Amount, Market Value, Stamp Duty, Registration Fee, Witnesses, Boundaries (East/West/North/South).\n\n'
+  +'FIELDS TO EXTRACT (extract all visible): Document Number, Registration Date, Property Type, Transaction Type, Sub-Registrar Office, District, Mandal, Village/Locality, Ward Number, Door Number, Survey Number, Land Extent (MUST show sq yards AND cents both), Built-up Area (sq feet), Seller Full Name, Seller Address, Seller Phone (సెల్ నెం.), Seller Aadhaar (last 4 digits only), Buyer Full Name, Buyer Address, Buyer Phone (సెల్ నెం.), Buyer Aadhaar (last 4 digits only), Sale Amount, Market Value, Stamp Duty, Registration Fee, Witnesses, Boundaries (East/West/North/South).\n\nPHONE NUMBER RULE: Look for patterns like "సెల్ నెం.XXXXXXXXXX" or "Cell No.XXXXXXXXXX" or "Ph.XXXXXXXXXX" or any 10-digit number starting with 6,7,8,9. Extract ALL phone numbers found for each person. Indian mobile numbers are 10 digits starting with 6/7/8/9.\n\n'
   +'OWNERSHIP CHAIN: Extract ALL transactions from endorsement pages. '
   +'ownershipChain[0]=CURRENT (this document, most recent seller to buyer). '
   +'ownershipChain[1]=Previous transaction. ownershipChain[2]=Before that. '
@@ -1611,7 +1776,7 @@ var DOC_PROMPT = 'You are a specialist reading Andhra Pradesh property documents
   +'{"docType":"Registration","transactionType":"Sale","propertyType":"House","documentDate":"DD.MM.YYYY","language":"Telugu","summary":"summary","confidence":90,'
   +'"fields":[{"key":"field name Telugu (English)","value":"value","confidence":95,"alert":false}],'
   +'"financials":{"saleAmount":{"value":"Rs. X/-","telugu":"Ru. X/-","confidence":95},"marketValue":{"value":"Rs. X/-","telugu":"Ru. X/-","confidence":85},"stampDuty":{"value":"Rs. X/-","telugu":"Ru. X/-","confidence":95},"registrationFee":{"value":"Rs. X/-","telugu":"Ru. X/-","confidence":95},"totalRegistrationCost":{"value":"Rs. X/-","telugu":"Ru. X/-","confidence":90},"totalInvestment":{"value":"Rs. X/-","telugu":"Ru. X/-","confidence":95},"pricePerCent":{"value":null,"telugu":null,"confidence":0},"pricePerSqyard":{"value":null,"telugu":null,"confidence":0}},'
-  +'"ownershipChain":[{"order":1,"seller":"name","buyer":"name","date":"DD.MM.YYYY","regNumber":"X/YYYY","amount":"Rs. X/-","surveyNumber":"X/X","extent":"X sq yards = Y cents","confidence":95}],'
+  +'"ownershipChain":[{"order":1,"seller":"name","buyer":"name","sellerPhone":"10-digit phone or empty","buyerPhone":"10-digit phone or empty","date":"DD.MM.YYYY","regNumber":"X/YYYY","amount":"Rs. X/-","surveyNumber":"X/X","extent":"X sq yards = Y cents","confidence":95}],'
   +'"alerts":[{"message":"alert text","severity":"high"}]}';
 
 async function handlePhoto(e, source) {
@@ -1884,8 +2049,13 @@ function saveVendor() {
   ensureVendor(name, document.getElementById('v-cat').value, document.getElementById('v-phone').value||null);
   var loc = document.getElementById('v-loc').value.trim();
   if (loc) state.vendors[name].location = loc;
+  // Auto-add to contacts if phone present
+  var vphone = document.getElementById('v-phone').value.trim();
+  if (vphone) {
+    autoAddVendorContact(name, vphone, document.getElementById('v-cat').value, 'Manually added vendor', today());
+  }
   saveData(); renderVendors(); closeModal('add-vendor');
-  pushToSheet('Vendors',['name','category','phone','location'],[name,document.getElementById('v-cat').value,document.getElementById('v-phone').value||'',loc]);
+  pushToSheet('Vendors',['name','category','phone','location'],[name,document.getElementById('v-cat').value,vphone,loc]);
   document.getElementById('v-name').value='';
   document.getElementById('v-phone').value='';
   document.getElementById('v-loc').value='';
@@ -1961,8 +2131,10 @@ function saveProject() {
   // Clear form
   ['p-name','p-landcost','p-cents','p-houses','p-location','p-saleprice'].forEach(function(id){ document.getElementById(id).value=''; });
   toast('Project saved!', 'ok');
-  pushToSheet('Projects', ['id','name','landCost','totalCents','housesPlanned','status','location','date'],
-    [proj.id,proj.name,proj.landCost,proj.totalCents,proj.housesPlanned,proj.status,proj.location,proj.date]);
+  pushToSheet('Projects',
+    ['id','name','landCost','totalCents','housesPlanned','status','location','date','expectedSalePerHouse'],
+    [proj.id,proj.name,proj.landCost,proj.totalCents,proj.housesPlanned,proj.status,proj.location,proj.date,proj.expectedSalePerHouse||0]
+  );
 }
 
 function renderProjects() {
@@ -2199,47 +2371,86 @@ function saveContact() {
   state.contacts.push(contact);
   saveData(); renderContacts();
   closeModal('add-contact');
+  // Push to Google Sheet
+  pushToSheet('Contacts',
+    ['id','name','phone','role','address','notes','addedDate'],
+    [contact.id, contact.name, contact.phone, contact.role, contact.address, contact.notes, contact.addedDate]
+  );
   ['con-name','con-phone','con-addr','con-notes'].forEach(function(id){ document.getElementById(id).value=''; });
   toast('Contact saved!', 'ok');
+}
+
+function extractPhones(text) {
+  // Extract all 10-digit Indian mobile numbers from text
+  var matches = (text||'').match(/[6-9][0-9]{9}/g) || [];
+  return matches.filter(function(p,i,a){ return a.indexOf(p)===i; }); // unique
 }
 
 function autoAddContactFromDoc(result) {
   if (!result || !result.ownershipChain || !result.ownershipChain.length) return;
   if (!state.contacts) state.contacts = [];
+
+  // Also extract phones from all fields text
+  var allFieldsText = (result.fields||[]).map(function(f){ return f.value||''; }).join(' ');
+
   result.ownershipChain.forEach(function(step, i) {
     // Add buyer
     if (step.buyer && step.buyer.length > 2) {
-      var bname = step.buyer.replace(/\(.*?\)/g,'').trim().substring(0,50);
+      var bname = step.buyer.replace(/\(.*?\)/g,'').trim().substring(0,60);
       if (bname && bname !== '—') {
+        // Get phone — from step.buyerPhone or extract from buyer text
+        var bphones = step.buyerPhone ? [step.buyerPhone] : extractPhones(step.buyer);
+        var bphone = bphones.length ? bphones[0] : '';
         var exists = state.contacts.find(function(c){ return c.name.toLowerCase()===bname.toLowerCase(); });
         if (!exists) {
           state.contacts.push({
             id: 'con_'+Date.now()+'_b'+i,
-            name: bname, phone: '', role: 'buyer', address: '',
+            name: bname,
+            phone: bphone,
+            role: 'buyer',
+            address: '',
             notes: (result.documentDate||today())+' · '+(step.amount||'')+(step.surveyNumber?' · Survey '+step.surveyNumber:''),
-            addedDate: today(), autoAdded: true
+            addedDate: today(),
+            autoAdded: true
           });
+        } else if (bphone && !exists.phone) {
+          exists.phone = bphone;
         }
       }
     }
     // Add seller
     if (step.seller && step.seller.length > 2) {
-      var sname = step.seller.replace(/\(.*?\)/g,'').trim().substring(0,50);
+      var sname = step.seller.replace(/\(.*?\)/g,'').trim().substring(0,60);
       if (sname && sname !== '—') {
+        var sphones = step.sellerPhone ? [step.sellerPhone] : extractPhones(step.seller);
+        var sphone = sphones.length ? sphones[0] : '';
         var exists2 = state.contacts.find(function(c){ return c.name.toLowerCase()===sname.toLowerCase(); });
         if (!exists2) {
           state.contacts.push({
             id: 'con_'+Date.now()+'_s'+i,
-            name: sname, phone: '', role: 'seller', address: '',
+            name: sname,
+            phone: sphone,
+            role: 'seller',
+            address: '',
             notes: (result.documentDate||today())+' · '+(step.amount||'')+(step.surveyNumber?' · Survey '+step.surveyNumber:''),
-            addedDate: today(), autoAdded: true
+            addedDate: today(),
+            autoAdded: true
           });
+        } else if (sphone && !exists2.phone) {
+          exists2.phone = sphone;
         }
       }
     }
   });
   saveData();
   renderContacts();
+  // Push all newly added contacts to Sheet
+  (state.contacts||[]).filter(function(c){ return c.autoAdded; }).forEach(function(c){
+    pushToSheet('Contacts',
+      ['id','name','phone','role','address','notes','addedDate'],
+      [c.id, c.name, c.phone||'', c.role, c.address||'', c.notes||'', c.addedDate||today()]
+    );
+  });
 }
 
 function filterContacts(f) {
@@ -2272,8 +2483,13 @@ function renderContacts() {
         +(c.phone?'<div class="cc-detail">📞 '+escH(c.phone)+'</div>':'')
         +(c.address?'<div class="cc-detail">📍 '+escH(c.address)+'</div>':'')
         +(c.notes?'<div class="cc-detail" style="color:var(--tx3)">📝 '+escH(c.notes)+'</div>':'')
+        +(c.phone?'<div style="display:flex;align-items:center;gap:6px;margin-top:5px">'
+          +'<span style="font-size:14px">📞</span>'
+          +'<span style="font-size:13px;font-family:JetBrains Mono;font-weight:600;color:var(--teal)">'+c.phone+'</span>'
+          +'</div>':'')
         +'<div class="cc-actions">'
-          +(c.phone?'<a href="tel:'+c.phone+'" class="btn ghost sm" style="font-size:12px;text-decoration:none">📞 Call</a>':'')
+          +(c.phone?'<a href="tel:'+c.phone+'" class="btn ghost sm" style="font-size:12px;text-decoration:none;color:var(--teal);border-color:rgba(58,232,200,0.3)">📞 Call</a>':'')
+          +(c.phone?'<a href="https://wa.me/91'+c.phone.replace(/[^0-9]/g,'')+'" target="_blank" class="btn ghost sm" style="font-size:12px;text-decoration:none;color:#25D366;border-color:rgba(37,211,102,0.4)">💬 WhatsApp</a>':'')
           +'<button class="btn ghost sm" style="font-size:12px;color:var(--rose)" onclick="deleteContact(this)" data-cid="'+c.id+'">🗑️</button>'
         +'</div>'
       +'</div>'
