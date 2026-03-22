@@ -795,6 +795,14 @@ body{background:var(--bg);color:var(--tx);font-family:'Noto Sans Telugu',sans-se
         <div class="si"><div class="si-ico">📊</div><div class="si-body"><div class="si-t">Google Sheet</div><div class="si-s">Data ఇక్కడ save అవుతుంది</div><div class="si-v" id="cfg-sheet">Not configured</div></div><button class="btn ghost sm" onclick="openSheetInBrowser()">Open ↗</button></div>
         <div class="si"><div class="si-ico">🤖</div><div class="si-body"><div class="si-t">Gemini AI Keys</div><div class="si-s">Free — 15 req/min per key. Multiple keys = more quota</div><div class="si-v" id="cfg-ai">Not configured</div></div><button class="btn ghost sm" onclick="openModal('manage-keys')">Manage</button></div>
         <div class="si"><div class="si-ico">☁️</div><div class="si-body"><div class="si-t">Sync Status</div><div class="si-s" id="cfg-sync">Last sync: Never</div></div><button class="btn ghost sm" onclick="syncNow()">Sync</button></div>
+        <div class="si" style="border-color:rgba(58,232,200,0.3)">
+          <div class="si-ico">📁</div>
+          <div class="si-body">
+            <div class="si-t" style="color:var(--teal)">Google Drive</div>
+            <div class="si-s">Documents, Bills, Registrations saved here</div>
+          </div>
+          <button class="btn ghost sm" style="color:var(--teal);border-color:rgba(58,232,200,0.3)" onclick="getDriveUrl()">Open ↗</button>
+        </div>
         <div class="si"><div class="si-ico">📱</div><div class="si-body"><div class="si-t">New Phone Setup</div><div class="si-s">Same Sheet ID + Gemini Key enter చేయండి</div></div><button class="btn ghost sm" onclick="showGuide()">Guide</button></div>
         <div class="si" style="border-color:rgba(58,232,200,0.3);background:rgba(58,232,200,0.03)">
           <div class="si-ico">📲</div>
@@ -1148,28 +1156,68 @@ var APPS_SCRIPT_CODE = [
   '    var ss = SpreadsheetApp.openById(data.sheetId);',
   '    var action = data.action;',
   '',
+  '    // ── APPEND ROW ──',
   '    if (action === "append") {',
   '      var sheet = ss.getSheetByName(data.sheetName) || ss.insertSheet(data.sheetName);',
   '      if (sheet.getLastRow() === 0) sheet.appendRow(data.headers);',
   '      sheet.appendRow(data.row);',
-  '      return ContentService.createTextOutput(JSON.stringify({ok: true}))',
-  '        .setMimeType(ContentService.MimeType.JSON);',
+  '      return ok({});',
   '    }',
   '',
+  '    // ── READ ALL SHEETS ──',
   '    if (action === "readAll") {',
   '      var result = {};',
   '      ["Entries","Vendors","Prices","Documents","Contacts","Projects"].forEach(function(name) {',
   '        var sh = ss.getSheetByName(name);',
   '        result[name] = (sh && sh.getLastRow() > 1) ? sh.getDataRange().getValues() : [];',
   '      });',
-  '      return ContentService.createTextOutput(JSON.stringify({ok: true, data: result}))',
-  '        .setMimeType(ContentService.MimeType.JSON);',
+  '      return ok({data: result});',
   '    }',
   '',
-  '    if (action === "ping") {',
-  '      return ContentService.createTextOutput(JSON.stringify({ok: true}))',
-  '        .setMimeType(ContentService.MimeType.JSON);',
+  '    // ── SAVE FILE TO DRIVE ──',
+  '    if (action === "saveFile") {',
+  '      // Get or create Nirmit Docs root folder',
+  '      var rootFolder = getOrCreateFolder("Nirmit Docs", DriveApp.getRootFolder());',
+  '',
+  '      // Determine subfolder based on fileType',
+  '      var folder;',
+  '      if (data.fileType === "Registration" || data.fileType === "Agreement" || data.fileType === "EC") {',
+  '        // Properties/SurveyNo_Location/',
+  '        var propsFolder = getOrCreateFolder("Properties", rootFolder);',
+  '        var propName = sanitize(data.propertyFolder || "Unknown_Property");',
+  '        folder = getOrCreateFolder(propName, propsFolder);',
+  '      } else if (data.fileType === "Bill") {',
+  '        // Bills/YYYY-MM/',
+  '        var billsFolder = getOrCreateFolder("Bills", rootFolder);',
+  '        var monthFolder = data.monthFolder || getYearMonth();',
+  '        folder = getOrCreateFolder(monthFolder, billsFolder);',
+  '      } else if (data.fileType === "Contact") {',
+  '        folder = getOrCreateFolder("Contacts_Docs", rootFolder);',
+  '      } else {',
+  '        folder = getOrCreateFolder("Other", rootFolder);',
+  '      }',
+  '',
+  '      // Save the file',
+  '      var blob = Utilities.newBlob(',
+  '        Utilities.base64Decode(data.fileBase64),',
+  '        data.mimeType,',
+  '        data.fileName',
+  '      );',
+  '      var file = folder.createFile(blob);',
+  '      file.setDescription(data.description || "");',
+  '',
+  '      // Return file URL',
+  '      return ok({fileId: file.getId(), fileUrl: file.getUrl(), fileName: file.getName()});',
   '    }',
+  '',
+  '    // ── GET DRIVE FOLDER URL ──',
+  '    if (action === "getDriveUrl") {',
+  '      var root = getOrCreateFolder("Nirmit Docs", DriveApp.getRootFolder());',
+  '      return ok({url: "https://drive.google.com/drive/folders/" + root.getId()});',
+  '    }',
+  '',
+  '    // ── PING ──',
+  '    if (action === "ping") { return ok({}); }',
   '',
   '  } catch(err) {',
   '    return ContentService.createTextOutput(JSON.stringify({ok: false, error: err.toString()}))',
@@ -1177,8 +1225,30 @@ var APPS_SCRIPT_CODE = [
   '  }',
   '}',
   '',
+  'function ok(extra) {',
+  '  var obj = Object.assign({ok: true}, extra);',
+  '  return ContentService.createTextOutput(JSON.stringify(obj))',
+  '    .setMimeType(ContentService.MimeType.JSON);',
+  '}',
+  '',
+  'function getOrCreateFolder(name, parent) {',
+  '  var iter = parent.getFoldersByName(name);',
+  '  if (iter.hasNext()) return iter.next();',
+  '  return parent.createFolder(name);',
+  '}',
+  '',
+  'function sanitize(name) {',
+  '  return name.replace(/[^a-zA-Z0-9_\-\.\s]/g, "").trim().substring(0, 50);',
+  '}',
+  '',
+  'function getYearMonth() {',
+  '  var d = new Date();',
+  '  var m = ("0" + (d.getMonth()+1)).slice(-2);',
+  '  return d.getFullYear() + "-" + m;',
+  '}',
+  '',
   'function doGet(e) {',
-  '  return ContentService.createTextOutput(JSON.stringify({ok: true, msg: "Nirmit API"}))',
+  '  return ContentService.createTextOutput(JSON.stringify({ok: true, msg: "Nirmit API v2 with Drive"}))',
   '    .setMimeType(ContentService.MimeType.JSON);',
   '}'
 ].join('\n');
@@ -1723,6 +1793,15 @@ function renderDocList() {
       +'<div class="doc-card fu">'
         +'<div class="dc-hdr">'
           +'<div class="dc-ico">'+emoji+'</div>'
+          +'<div style="flex:1;min-width:0">'
+            +'<div class="dc-name">'+escH(r.docType||'Document')+(r.transactionType?' · '+r.transactionType:'')+'</div>'
+            +'<div class="dc-date">📅 '+doc.date+(r.propertyType?' · 🏘️ '+r.propertyType:'')+'</div>'
+            +(doc.driveUrl
+              ?'<a href="'+doc.driveUrl+'" target="_blank" style="font-size:11px;color:var(--teal);text-decoration:none;margin-top:3px;display:block">📁 Drive లో చూడండి ↗</a>'
+              :'<span style="font-size:11px;color:var(--tx3);margin-top:2px;display:block">📁 Drive కి uploading...</span>')
+          +'</div>'
+          +'<span class="dc-badge '+badge+'">'+(r.docType||'Doc')+'</span>'
+        +'</div>'
           +'<div><div class="dc-name">'+escH(r.docType||'Document')+(r.transactionType?' · '+r.transactionType:'')+'</div>'
           +'<div class="dc-date">📅 '+doc.date+(r.propertyType?' · 🏘️ '+r.propertyType:'')+'</div></div>'
           +'<span class="dc-badge '+badge+'">'+(r.docType||'Doc')+'</span>'
@@ -2082,6 +2161,8 @@ async function handlePhoto(e, source) {
     );
     // Auto-add buyer/seller to contacts
     autoAddContactFromDoc(result);
+    // Save original file to Google Drive
+    saveToDrive(b64, file.type, file.name, result.docType||'Other', result);
 
     hideProc();
 
@@ -2893,6 +2974,98 @@ function deleteContact(el) { var id = el.dataset.cid;
   saveData(); renderContacts(); toast('Contact deleted', 'ok');
 }
 
+
+// ════════════════════════════════════════════════════════
+// GOOGLE DRIVE — FILE SAVING
+// ════════════════════════════════════════════════════════
+function saveToDrive(b64, mimeType, fileName, docType, result) {
+  if (!cfg.scriptUrl || !cfg.sheetId) return;
+
+  // Determine folder based on doc type
+  var fileType, propertyFolder, monthFolder;
+  var r = result || {};
+
+  if (docType === 'Registration' || docType === 'Agreement') {
+    fileType = docType;
+    // Build property folder name from survey number + location
+    var surveyNo = '', location = '';
+    (r.fields||[]).forEach(function(f){
+      var k = (f.key||'').toLowerCase();
+      var v = typeof f.value==='object' ? (f.value&&f.value.value||'') : (f.value||'');
+      if (k.includes('survey')) surveyNo = String(v).replace(/[^0-9\/]/g,'').substring(0,15);
+      if (k.includes('village') || k.includes('locality') || k.includes('స్థలం')) {
+        location = String(v).split(',')[0].trim().substring(0,20);
+      }
+    });
+    var propName = '';
+    if (location) propName += location.replace(/\s+/g,'_');
+    if (surveyNo) propName += (propName?'_':'') + 'Survey_' + surveyNo.replace('/','_');
+    if (!propName) propName = 'Unknown_Property';
+    propertyFolder = propName;
+
+  } else if (docType === 'Bill' || docType === 'Other') {
+    fileType = 'Bill';
+    var d = new Date();
+    monthFolder = d.getFullYear() + '-' + ('0'+(d.getMonth()+1)).slice(-2);
+
+  } else {
+    fileType = 'Other';
+  }
+
+  // Build description
+  var desc = docType + ' | ' + (r.documentDate||today());
+  if (r.financials && r.financials.saleAmount) {
+    var sa = r.financials.saleAmount;
+    desc += ' | ' + (typeof sa==='object' ? sa.value||'' : sa);
+  }
+
+  // Push to Apps Script → Drive
+  fetch(cfg.scriptUrl, {
+    method: 'POST',
+    body: JSON.stringify({
+      action: 'saveFile',
+      sheetId: cfg.sheetId,
+      fileBase64: b64,
+      mimeType: mimeType,
+      fileName: fileName,
+      fileType: fileType,
+      propertyFolder: propertyFolder || '',
+      monthFolder: monthFolder || '',
+      description: desc
+    })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if (data.ok && data.fileUrl) {
+      // Save drive URL to document record
+      var lastDoc = state.documents[state.documents.length-1];
+      if (lastDoc) {
+        lastDoc.driveUrl = data.fileUrl;
+        lastDoc.driveFileId = data.fileId;
+        saveData();
+        renderDocList();
+      }
+      toast('📁 Drive లో saved!', 'ok');
+    }
+  })
+  .catch(function(err){
+    console.log('Drive save failed:', err.message);
+    // Silent fail — don't block user
+  });
+}
+
+function getDriveUrl() {
+  if (!cfg.scriptUrl || !cfg.sheetId) { toast('Setup complete చేయండి first', 'err'); return; }
+  fetch(cfg.scriptUrl, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'getDriveUrl', sheetId: cfg.sheetId })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if (data.ok && data.url) window.open(data.url, '_blank');
+  })
+  .catch(function(){ toast('Drive URL fetch failed', 'err'); });
+}
 
 // ════════════════════════════════════════════════════════
 // QR CODE — GENERATE & SCAN
