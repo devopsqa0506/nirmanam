@@ -1248,8 +1248,18 @@ var APPS_SCRIPT_CODE = [
   '}',
   '',
   'function doGet(e) {',
-  '  return ContentService.createTextOutput(JSON.stringify({ok: true, msg: "Nirmit API v2 with Drive"}))',
-  '    .setMimeType(ContentService.MimeType.JSON);',
+  '  try {',
+  '    var params = e.parameter;',
+  '    if (params.action === "getDriveUrl" && params.sheetId) {',
+  '      var root = getOrCreateFolder("Nirmit Docs", DriveApp.getRootFolder());',
+  '      return ok({url: "https://drive.google.com/drive/folders/" + root.getId()});',
+  '    }',
+  '    return ContentService.createTextOutput(JSON.stringify({ok: true, msg: "Nirmit API v2"}))',
+  '      .setMimeType(ContentService.MimeType.JSON);',
+  '  } catch(err) {',
+  '    return ContentService.createTextOutput(JSON.stringify({ok: false, error: err.toString()}))',
+  '      .setMimeType(ContentService.MimeType.JSON);',
+  '  }',
   '}'
 ].join('\n');
 
@@ -3055,16 +3065,9 @@ function saveToDrive(b64, mimeType, fileName, docType, result) {
 }
 
 function getDriveUrl() {
-  if (!cfg.scriptUrl || !cfg.sheetId) { toast('Setup complete చేయండి first', 'err'); return; }
-  fetch(cfg.scriptUrl, {
-    method: 'POST',
-    body: JSON.stringify({ action: 'getDriveUrl', sheetId: cfg.sheetId })
-  })
-  .then(function(r){ return r.json(); })
-  .then(function(data){
-    if (data.ok && data.url) window.open(data.url, '_blank');
-  })
-  .catch(function(){ toast('Drive URL fetch failed', 'err'); });
+  // Direct open Drive — search for Nirmit Docs folder
+  window.open('https://drive.google.com/drive/search?q=Nirmit+Docs', '_blank');
+  toast('Google Drive open అయింది — "Nirmit Docs" folder కనపడుతుంది', 'info');
 }
 
 // ════════════════════════════════════════════════════════
