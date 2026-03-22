@@ -1714,6 +1714,204 @@ Flag if price seems high vs market rates. Warn about large pending dues. Be like
   }
 }
 
+// ═══════════════════════════════════════════════════
+// PHOTO / PDF DOCUMENT HANDLER
+// ═══════════════════════════════════════════════════
+async function handlePhoto(e, source) {
+  const file = e.target.files[0];
+  if (!file) return;
+  e.target.value = '';
+
+  const isPDF = file.type === 'application/pdf';
+  const isImage = file.type.startsWith('image/');
+  if (!isPDF && !isImage) { toast('PDF or Image only', 'err'); return; }
+
+  if (!cfg.geminiKey) {
+    toast('Gemini API key not set. Go to Settings.', 'err');
+    return;
+  }
+
+  // Step 1: Show processing
+  showProc('Uploading ' + (isPDF ? 'PDF' : 'Image') + '... File: ' + file.name + ' (' + (file.size/1024).toFixed(0) + ' KB)');
+
+  // Step 2: Convert to base64
+  let b64;
+  try {
+    b64 = await fileToB64(file);
+  } catch(err) {
+    hideProc();
+    toast('File read failed: ' + err.message, 'err');
+    return;
+  }
+
+  // Step 3: Send to Gemini
+  showProc('AI analyzing document... Reading Telugu text... Please wait 10-30 seconds');
+
+  try {
+    const parts = [
+      { inlineData: { mimeType: file.type, data: b64 } },
+      { text: DOC_PROMPT }
+    ];
+
+    const res = await fetch(
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + cfg.geminiKey,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ role: 'user', parts: parts }] })
+      }
+    );
+
+    showProc('Processing results... Extracting fields...');
+
+    const data = await res.json();
+
+    if (data.error) {
+      hideProc();
+      const msg = data.error.message || 'Unknown AI error';
+      if (source === 'chat') addBubble('ai', '<span class="bad">AI Error: ' + msg + '</span>');
+      else toast('AI Error: ' + msg, 'err');
+      return;
+    }
+
+    const rawText = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text) || '{}';
+
+    // Parse JSON result
+    let result;
+    try {
+      const clean = rawText.replace(/```json|```/g, '').trim();
+      const m = clean.match(/\{[\s\S]*\}/);
+      result = JSON.parse(m ? m[0] : clean);
+    } catch(pe) {
+      result = { docType: 'Unknown', summary: rawText.substring(0, 200), fields: [], alerts: [], confidence: 40 };
+    }
+
+    // Get actual document date
+    const docDate = result.documentDate
+      || (result.fields && result.fields.find(function(f){ return (f.key||'').toLowerCase().includes('registration date') || (f.key||'').includes('తేదీ'); }) || {}).value
+      || today();
+
+    // Save record
+    const doc = {
+      id: 'd' + Date.now(),
+      date: docDate,
+      fileName: file.name,
+      type: result.docType || 'Document',
+      propertyType: result.propertyType || '',
+      result: result
+    };
+    state.documents.push(doc);
+    saveLocalData();
+    renderDocList();
+
+    // Push to Sheet
+    pushToSheet('Documents',
+      ['id','date','type','propertyType','summary','fileName'],
+      [doc.id, doc.date, doc.type, doc.propertyType, (result.summary||'').substring(0,200), file.name]
+    );
+
+    hideProc();
+
+    if (source === 'chat') {
+      showSc('chat');
+      addBubble('usr', '📄 Document: ' + file.name);
+      addBubble('ai', buildDocHtml(result));
+    } else {
+      showSc('docs');
+      const fieldCount = result.fields ? result.fields.length : 0;
+      toast('Document analyzed! ' + fieldCount + ' fields extracted.', 'ok');
+    }
+
+  } catch(err) {
+    hideProc();
+    if (source === 'chat') addBubble('ai', '<span class="bad">Network error: ' + err.message + '</span>');
+    else toast('Error: ' + err.message, 'err');
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// BUILD DOC HTML FOR DISPLAY
+// ═══════════════════════════════════════════════════
+function buildDocHtml(r) {
+  var typeColor = {Registration:'inf', Agreement:'wrn', Bill:'ok'}[r.docType] || 'ok';
+  var html = '<b class="' + typeColor + '">📄 ' + (r.docType||'Document') + '</b><br>';
+  html += '<span style="color:var(--tx2);font-size:13px">' + (r.summary||'') + '</span>';
+
+  // Financials
+  var fin = r.financials;
+  var fv = function(f){ return f ? (typeof f === 'object' ? f.value : f) : null; };
+  var ft = function(f){ return f ? (typeof f === 'object' ? f.telugu : null) : null; };
+  var fc = function(f){ return f ? (typeof f === 'object' ? (f.confidence||100) : 100) : 100; };
+  var cb = function(c){ return c < 70 ? ' <span style="font-size:10px;color:var(--rose)">('+c+'%)</span>' : c < 85 ? ' <span style="font-size:10px;color:var(--amb)">('+c+'%)</span>' : ''; };
+  var isLand = r.propertyType === 'Land' || r.propertyType === 'Plot' || r.propertyType === 'Agricultural';
+
+  if (fin) {
+    html += '<div class="ccard" style="margin-top:10px">';
+    html += '<div class="ccard-t">💰 Financial Details (ఆర్థిక వివరాలు)</div>';
+    if(fv(fin.saleAmount)) html += '<div class="crow"><span class="ck">💰 విక్రయ మొత్తం</span><span class="cv ok">' + fv(fin.saleAmount) + cb(fc(fin.saleAmount)) + '</span></div>';
+    if(fv(fin.marketValue)) html += '<div class="crow"><span class="ck">🏠 మార్కెట్ విలువ</span><span class="cv">' + fv(fin.marketValue) + cb(fc(fin.marketValue)) + '</span></div>';
+    if(fv(fin.stampDuty)) html += '<div class="crow"><span class="ck">📋 స్టాంప్ డ్యూటీ</span><span class="cv w">' + fv(fin.stampDuty) + '</span></div>';
+    if(fv(fin.registrationFee)) html += '<div class="crow"><span class="ck">🏛️ రిజి. రుసుము</span><span class="cv">' + fv(fin.registrationFee) + '</span></div>';
+    if(fv(fin.totalInvestment)) html += '<div class="crow"><span class="ck">💎 మొత్తం పెట్టుబడి</span><span class="cv ok" style="color:var(--teal)">' + fv(fin.totalInvestment) + '</span></div>';
+    if(fv(fin.pricePerCent) && isLand) html += '<div class="crow"><span class="ck">📐 సెంట్ కి ధర</span><span class="cv ok">' + fv(fin.pricePerCent) + '</span></div>';
+    if(r.propertyType) html += '<div class="crow"><span class="ck">🏘️ ఆస్తి రకం</span><span class="cv" style="color:var(--sky)">' + r.propertyType + (r.transactionType ? ' · ' + r.transactionType : '') + '</span></div>';
+    html += '</div>';
+  }
+
+  // Ownership chain
+  if (r.ownershipChain && r.ownershipChain.length) {
+    html += '<div class="ccard" style="margin-top:10px">';
+    html += '<div class="ccard-t">🔗 Ownership Chain · యాజమాన్య చరిత్ర (' + r.ownershipChain.length + ' transaction' + (r.ownershipChain.length > 1 ? 's' : '') + ')</div>';
+    r.ownershipChain.forEach(function(step, i) {
+      var isCurrent = i === 0;
+      var bc = isCurrent ? 'rgba(58,232,200,0.4)' : '#2a3347';
+      var bg = isCurrent ? 'rgba(58,232,200,0.05)' : '#1e2535';
+      html += '<div style="background:' + bg + ';border:1px solid ' + bc + ';border-radius:9px;padding:11px 13px;margin-bottom:8px">';
+      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;flex-wrap:wrap">';
+      html += '<span style="width:24px;height:24px;border-radius:6px;background:#263040;border:1px solid ' + (isCurrent?'var(--teal)':'var(--amb)') + ';display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:' + (isCurrent?'var(--teal)':'var(--amb)') + '">' + (step.order||i+1) + '</span>';
+      html += '<span style="font-size:14px;color:var(--teal);font-weight:700">' + (step.date||'Date N/A') + '</span>';
+      if(step.regNumber) html += '<span style="font-size:12px;color:var(--amb);background:rgba(232,184,74,0.12);padding:2px 8px;border-radius:6px;border:1px solid rgba(232,184,74,0.3)">Reg# ' + step.regNumber + '</span>';
+      if(isCurrent) html += '<span style="font-size:11px;background:rgba(58,232,200,0.15);color:var(--teal);padding:2px 7px;border-radius:5px">Current</span>';
+      html += '</div>';
+      html += '<div style="font-size:14px;margin-bottom:4px"><span style="color:var(--sky);font-weight:700">విక్రేత: </span><b>' + (step.seller||'—') + '</b></div>';
+      html += '<div style="font-size:14px;margin-bottom:4px"><span style="color:var(--teal);font-weight:700">కొనుగోలుదారు: </span><b>' + (step.buyer||'—') + '</b></div>';
+      if(step.extent) html += '<div style="font-size:13px;margin-bottom:3px"><span style="color:var(--tx2)">విస్తీర్ణం: </span>' + step.extent + '</div>';
+      if(step.amount) html += '<div style="font-size:14px;color:var(--amb);font-weight:700;margin-top:5px;padding-top:5px;border-top:1px solid #2a3347">' + step.amount + '</div>';
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+
+  // All fields
+  if (r.fields && r.fields.length) {
+    html += '<div class="ccard" style="margin-top:10px"><div class="ccard-t">📋 All Details</div>';
+    r.fields.forEach(function(f) {
+      var conf = f.confidence || 100;
+      var cs = conf < 70 ? 'color:var(--rose)' : conf < 85 ? 'color:var(--amb)' : '';
+      var ct = conf < 85 ? ' <span style="font-size:10px;opacity:0.7">(' + conf + '%)</span>' : '';
+      html += '<div class="crow"><span class="ck">' + (f.key||'') + '</span><span class="cv ' + (f.alert?'w':'') + '" style="' + cs + '">' + (f.value||'—') + ct + '</span></div>';
+    });
+    html += '</div>';
+  }
+
+  // Alerts
+  if (r.alerts && r.alerts.length) {
+    r.alerts.forEach(function(a) {
+      var msg = typeof a === 'object' ? a.message : a;
+      var sev = typeof a === 'object' ? a.severity : 'medium';
+      var sc = sev==='high' ? 'var(--rose)' : sev==='low' ? 'var(--teal)' : 'var(--amb)';
+      html += '<div class="alert-strip" style="color:' + sc + ';border-color:' + sc + '40;margin-top:6px"><b>⚠️ గమనించండి</b>' + msg + '</div>';
+    });
+  }
+
+  if (r.confidence && r.confidence < 80) {
+    html += '<div class="alert-strip" style="color:var(--rose);border-color:rgba(232,93,122,0.3);margin-top:6px"><b>⚠️ AI Confidence: ' + r.confidence + '%</b> — Some fields may need verification</div>';
+  }
+
+  return html;
+}
+
+
 function confirmEntry(entry, btn) {
   addEntry(entry);
   btn.closest('.ccard').innerHTML = '<div class="ccard-t ok">✓ Google Sheet లో Save అయింది! ☁️</div>';
