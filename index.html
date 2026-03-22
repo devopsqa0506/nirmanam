@@ -1121,6 +1121,25 @@ body{background:var(--bg);color:var(--tx);font-family:'Noto Sans Telugu',sans-se
   </div>
 </div>
 
+<!-- Script URL Modal -->
+<div class="mover" id="script-url-modal">
+  <div class="msheet">
+    <div class="mgrip"></div>
+    <div class="mt">🔗 Apps Script URL Update</div>
+    <div style="font-size:13px;color:var(--tx2);margin-bottom:12px;line-height:1.7">
+      Apps Script → Deploy → Manage deployments → URL copy చేయండి
+    </div>
+    <label class="fl">New Script URL *</label>
+    <input class="fi fi-mono" id="script-url-input"
+      placeholder="https://script.google.com/macros/s/..."
+      style="font-size:12px">
+    <div style="display:flex;gap:9px;margin-top:4px">
+      <button class="btn ghost full" onclick="closeModal('script-url-modal')">Cancel</button>
+      <button class="btn amb full" onclick="saveScriptUrl()">✓ Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- Apps Script Code Modal -->
 <div class="mover" id="script-modal">
   <div class="msheet">
@@ -2493,15 +2512,23 @@ function changeKey() {
 }
 
 function changeScriptUrl() {
-  var url = prompt('New Apps Script URL paste చేయండి:');
-  if (url && url.startsWith('https://script.google.com')) {
-    cfg.scriptUrl = url;
-    saveCfg();
-    updateSettingsUI();
-    toast('Script URL updated!', 'ok');
-  } else if (url) {
-    toast('Invalid URL — script.google.com తో start అవాలి', 'err');
+  openModal('script-url-modal');
+  var el = document.getElementById('script-url-input');
+  if (el) el.value = cfg.scriptUrl || '';
+}
+
+function saveScriptUrl() {
+  var el = document.getElementById('script-url-input');
+  var url = el ? el.value.trim() : '';
+  if (!url) { toast('URL enter చేయండి', 'err'); return; }
+  if (!url.startsWith('https://script.google.com')) {
+    toast('Invalid URL — script.google.com తో start అవాలి', 'err'); return;
   }
+  cfg.scriptUrl = url;
+  saveCfg();
+  updateSettingsUI();
+  closeModal('script-url-modal');
+  toast('Script URL updated! ✓', 'ok');
 }
 
 function getActiveKey() {
