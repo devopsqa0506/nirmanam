@@ -1521,6 +1521,7 @@ function renderDocList() {
           +'<span class="dc-badge '+badge+'">'+(r.docType||'Doc')+'</span>'
         +'</div>'
         +finHtml+chainHtml+fieldsHtml+alertsHtml+confWarn
+        +buildEcButton(r)
         +'<div style="padding:9px 13px;border-top:1px solid var(--bd)">'
         +'<button onclick="askAboutDoc()" style="width:100%;background:rgba(90,175,232,0.08);border:1px solid rgba(90,175,232,0.3);border-radius:9px;padding:10px;color:var(--sky);font-size:13px;cursor:pointer">💬 AI తో discuss చేయండి</button>'
         +'</div>'
@@ -1995,6 +1996,50 @@ function buildDocResultHtml(r) {
 // ════════════════════════════════════════════════════════
 // ASK AI ABOUT DOCUMENT
 // ════════════════════════════════════════════════════════
+function buildEcButton(r) {
+  // Only show for Registration documents
+  if (r.docType !== 'Registration') return '';
+
+  // Extract doc number and year from fields
+  var docNum = '', docYear = '';
+  (r.fields||[]).forEach(function(f){
+    var k = (f.key||'').toLowerCase();
+    // Doc number field — format: "19131/2024" or "19131"
+    if (k.includes('document number') || k.includes('doc no') || k.includes('డాక్యుమెంట్ నంబర్')) {
+      var val = (f.value||'').replace(/[^0-9\/]/g,'').trim();
+      var parts = val.split('/');
+      docNum = parts[0] || '';
+      if (parts[1] && parts[1].length === 4) docYear = parts[1];
+    }
+  });
+
+  // Fallback: get year from documentDate
+  if (!docYear && r.documentDate) {
+    var dp = r.documentDate.split('.');
+    if (dp.length === 3 && dp[2].length === 4) docYear = dp[2];
+  }
+
+  if (!docNum) return '';
+
+  // IGRS EC page URL with prefilled params
+  var igrsUrl = 'https://registration.ap.gov.in/igrs/EClandingPage';
+
+  return '<div style="padding:9px 13px 0">'
+    +'<a href="'+igrsUrl+'" target="_blank" '
+    +'style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;'
+    +'background:rgba(232,184,74,0.08);border:1.5px solid rgba(232,184,74,0.4);'
+    +'border-radius:9px;padding:11px 14px;color:var(--amb);font-size:13px;font-weight:600;'
+    +'text-decoration:none">'
+    +'🔍 Check EC on IGRS'
+    +'<span style="font-size:11px;background:rgba(232,184,74,0.15);padding:2px 8px;'
+    +'border-radius:5px;font-family:JetBrains Mono">Doc# '+escH(docNum)+(docYear?' / '+docYear:'')+'</span>'
+    +'</a>'
+    +'<div style="font-size:11px;color:var(--tx3);text-align:center;margin-top:4px">'
+    +'Tap చేస్తే IGRS portal open అవుతుంది — Doc# pre-noted చేసుకోండి'
+    +'</div>'
+    +'</div>';
+}
+
 function askAboutDoc(fileName, docType, summary) {
   // Switch to chat
   showSc('chat');
