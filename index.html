@@ -2451,10 +2451,13 @@ async function handlePhoto(e, source) {
 
   // Dynamic wait message based on file size
   var fileSizeMB = (b64.length * 0.75) / (1024 * 1024);
-  var waitMsg = fileSizeMB < 1   ? '30-45 seconds'
-              : fileSizeMB < 3   ? '45-60 seconds'
-              : fileSizeMB < 7   ? '1-2 minutes'
-              :                    '2-3 minutes';
+  // Calibrated from real usage: 60-page PDF = ~65 seconds
+  // base64 size ≈ fileSize * 1.33
+  var waitMsg = fileSizeMB < 0.5  ? '15-25 seconds'
+              : fileSizeMB < 2    ? '25-40 seconds'
+              : fileSizeMB < 5    ? '40-60 seconds'
+              : fileSizeMB < 15   ? '1-1.5 minutes'
+              :                     '1-2 minutes';
   var pageEstimate = file.type === 'application/pdf' ? Math.round(fileSizeMB * 3) + ' page PDF · ' : '';
   showProc('AI analyzing document...\nReading Telugu text...\n' + pageEstimate + 'Please wait ' + waitMsg);
 
@@ -2587,11 +2590,16 @@ async function handlePhoto(e, source) {
     );
     // Auto-add buyer/seller to contacts
     autoAddContactFromDoc(result);
-    // Save to Drive — chunked upload handles any size
+    // Save to Drive — only if not already uploaded
     var fileSizeMB = (b64.length * 0.75) / (1024 * 1024);
     console.log('File size for Drive upload:', fileSizeMB.toFixed(2), 'MB');
-    // await so hideProc waits for upload to complete
-    await compressAndUpload(file, result.docType||'Other', result);
+    // Check if this doc already has a Drive URL (already uploaded before)
+    var alreadyInDrive = doc.driveUrl || false;
+    if (!alreadyInDrive) {
+      await compressAndUpload(file, result.docType||'Other', result, doc);
+    } else {
+      console.log('Drive upload skipped — already uploaded:', doc.driveUrl);
+    }
 
     hideProc();
 
@@ -3471,7 +3479,7 @@ function deleteContact(el) { var id = el.dataset.cid;
 // ════════════════════════════════════════════════════════
 // GOOGLE DRIVE — FILE SAVING
 // ════════════════════════════════════════════════════════
-async function compressAndUpload(file, docType, result) {
+async function compressAndUpload(file, docType, result, docRef) {
   var b64 = await fileToB64(file);
 
   if (file.type.startsWith('image/')) {
@@ -3490,9 +3498,9 @@ async function compressAndUpload(file, docType, result) {
       var origMB = (b64.length*0.75)/(1024*1024);
       var newMB  = (compB64.length*0.75)/(1024*1024);
       toast('📁 Image compressed '+origMB.toFixed(1)+'MB → '+newMB.toFixed(1)+'MB', 'info');
-      saveToDrive(compB64, 'image/jpeg', file.name, docType, result);
+      saveToDrive(compB64, 'image/jpeg', file.name, docType, result, docRef);
     } catch(e) {
-      saveToDrive(b64, file.type, file.name, docType, result);
+      saveToDrive(b64, file.type, file.name, docType, result, docRef);
     }
     return;
   }
@@ -3500,7 +3508,7 @@ async function compressAndUpload(file, docType, result) {
   // PDF — send directly via saveToDrive
   var sizeMB = (b64.length*0.75)/(1024*1024);
   toast('📁 Uploading to Drive ('+sizeMB.toFixed(1)+'MB)...', 'info');
-  saveToDrive(b64, file.type, file.name, docType, result);
+  saveToDrive(b64, file.type, file.name, docType, result, docRef);
 }
 
 
@@ -3512,29 +3520,42 @@ function loadScript(src) {
   });
 }
 
-function saveToDrive(b64, mimeType, fileName, docType, result) {
+function saveToDrive(b64, mimeType, fileName, docType, result, docRef) {
   if (!cfg.scriptUrl || !cfg.sheetId) return;
 
   // Determine folder based on doc type
   var fileType, propertyFolder, monthFolder;
   var r = result || {};
 
-  if (docType === 'Registration' || docType === 'Agreement') {
+  if (docType === 'Registration' || docType === 'Agreement' || docType === 'EC') {
     fileType = docType;
-    // Build property folder name from survey number + location
-    var surveyNo = '', location = '';
-    (r.fields||[]).forEach(function(f){
-      var k = (f.key||'').toLowerCase();
-      var v = typeof f.value==='object' ? (f.value&&f.value.value||'') : (f.value||'');
-      if (k.includes('survey')) surveyNo = String(v).replace(/[^0-9\/]/g,'').substring(0,15);
-      if (k.includes('village') || k.includes('locality') || k.includes('స్థలం')) {
-        location = String(v).split(',')[0].trim().substring(0,20);
-      }
-    });
-    var propName = '';
-    if (location) propName += location.replace(/\s+/g,'_');
-    if (surveyNo) propName += (propName?'_':'') + 'Survey_' + surveyNo.replace('/','_');
-    if (!propName) propName = 'Unknown_Property';
+    // Use Survey Number as ONLY folder key — always consistent, no Gemini text variation
+    var surveyNo = '';
+    var docDistrict = '';
+    // First try ownershipChain
+    if (r.ownershipChain && r.ownershipChain[0]) {
+      var ch0 = r.ownershipChain[0];
+      surveyNo = String(ch0.surveyNumber || ch0.survey || '').replace(/[^0-9\/\-]/g,'').substring(0,20);
+    }
+    // Then try fields
+    if (!surveyNo) {
+      (r.fields||[]).forEach(function(f){
+        var k = (f.key||'').toLowerCase();
+        var v = typeof f.value==='object' ? (f.value&&f.value.value||'') : (f.value||'');
+        if ((k.includes('survey') || k.includes('సర్వే')) && !surveyNo) {
+          surveyNo = String(v).replace(/[^0-9\/\-]/g,'').trim().substring(0,20);
+        }
+        if ((k.includes('district') || k.includes('mandal')) && !docDistrict) {
+          docDistrict = String(v).split(',')[0].trim().substring(0,15).replace(/\s+/g,'');
+        }
+      });
+    }
+    // Also try direct result fields
+    if (!surveyNo && r.surveyNumber) surveyNo = String(r.surveyNumber).replace(/[^0-9\/\-]/g,'').substring(0,20);
+    // Normalize survey: 620/1 → 620_1
+    var surveyNorm = surveyNo ? surveyNo.replace(/[\/\\]/g,'_').replace(/\s+/g,'') : '';
+    // Build folder: Survey_620_1 (consistent, no location text that varies)
+    var propName = surveyNorm ? 'Survey_' + surveyNorm : (docDistrict ? docDistrict + '_Property' : 'Unknown_Property');
     propertyFolder = propName;
 
   } else if (docType === 'Bill' || docType === 'Other') {
@@ -3572,6 +3593,12 @@ function saveToDrive(b64, mimeType, fileName, docType, result) {
   fetch(cfg.scriptUrl, { method: 'POST', mode: 'no-cors', body: payload })
   .then(function(){
     console.log('Drive upload request sent successfully');
+    // Mark doc as uploaded so we don't upload again
+    if (docRef) {
+      docRef.driveUploaded = true;
+      docRef.driveFolder = propertyFolder || monthFolder || 'Other';
+      saveData();
+    }
     toast('📁 Drive కి upload అవుతోంది...', 'info');
   })
   .catch(function(err){
