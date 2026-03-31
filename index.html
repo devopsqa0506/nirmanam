@@ -2044,8 +2044,9 @@ function renderDocList() {
   var sorted = state.documents.slice().reverse();
   el.innerHTML = sorted.map(function(doc){
     var r = doc.result || {};
-    var emoji  = {Registration:'🏛️',Agreement:'📝',Bill:'🧾'}[r.docType] || '📄';
-    var badge  = {Registration:'reg',Agreement:'agr',Bill:'bil'}[r.docType] || 'reg';
+    var emoji  = {Registration:'🏛️',Agreement:'📝',Bill:'🧾',Receipt:'🧾'}[r.docType] || '📄';
+    var badge  = {Registration:'reg',Agreement:'agr',Bill:'bil',Receipt:'bil'}[r.docType] || 'reg';
+    var isBill = r.docType === 'Bill' || r.docType === 'Receipt';
     var isLand = r.propertyType==='Land'||r.propertyType==='Plot'||r.propertyType==='Agricultural';
     var fin    = r.financials || {};
 
@@ -2063,24 +2064,31 @@ function renderDocList() {
     function fc(f){ return f ? (typeof f==='object' ? (f.confidence||100) : 100) : 100; }
     function cb(c){ return c<70?'<span style="font-size:10px;color:var(--rose)"> ('+c+'%)</span>':c<85?'<span style="font-size:10px;color:var(--amb)"> ('+c+'%)</span>':''; }
 
-    // Financials
+    // Financials or Bill summary
     var finHtml = '';
-    var hasAnyFin = fv(fin.saleAmount)||fv(fin.stampDuty)||fv(fin.totalInvestment);
-    if (hasAnyFin) {
+    if (isBill) {
+      // Bill — show vendor, amount, item description
       finHtml = '<div class="fin-grid">';
-      // Row 1: Sale Amount + Market Value
-      if (fv(fin.saleAmount))      finHtml += '<div class="fin-card hl"><div class="fin-lbl">💰 విక్రయ మొత్తం (Sale Amount)'+cb(fc(fin.saleAmount))+'</div><div class="fin-val">'+fixAmountStr(fv(fin.saleAmount))+'</div>'+(ft(fin.saleAmount)?'<div class="fin-tel">'+ft(fin.saleAmount)+'</div>':'')+'</div>';
-      if (fv(fin.marketValue))     finHtml += '<div class="fin-card"><div class="fin-lbl">🏠 మార్కెట్ విలువ'+cb(fc(fin.marketValue))+'</div><div class="fin-val teal">'+fixAmountStr(fv(fin.marketValue))+'</div></div>';
-      // Row 2: Stamp Duty + Registration Fee
-      if (fv(fin.stampDuty))       finHtml += '<div class="fin-card"><div class="fin-lbl">📋 స్టాంప్ డ్యూటీ (Stamp Duty)</div><div class="fin-val sm">'+fixAmountStr(fv(fin.stampDuty))+'</div></div>';
-      else                          finHtml += '<div class="fin-card" style="opacity:0.4"><div class="fin-lbl">📋 స్టాంప్ డ్యూటీ</div><div class="fin-val sm" style="color:var(--tx3)">Not in doc</div></div>';
-      if (fv(fin.registrationFee)) finHtml += '<div class="fin-card"><div class="fin-lbl">🏛️ రిజి. రుసుము (Reg Fee)</div><div class="fin-val sm">'+fixAmountStr(fv(fin.registrationFee))+'</div></div>';
-      else                          finHtml += '<div class="fin-card" style="opacity:0.4"><div class="fin-lbl">🏛️ రిజి. రుసుము</div><div class="fin-val sm" style="color:var(--tx3)">Not in doc</div></div>';
-      // Row 3: Total Investment — full width, prominent
-      if (fv(fin.totalInvestment)) finHtml += '<div class="fin-card invest"><div class="fin-lbl" style="color:var(--teal)">💎 మొత్తం పెట్టుబడి = Sale + Stamp Duty + Reg Fee'+cb(fc(fin.totalInvestment))+'</div><div class="fin-val teal">'+fixAmountStr(fv(fin.totalInvestment))+'</div>'+(ft(fin.totalInvestment)?'<div class="fin-tel">'+ft(fin.totalInvestment)+'</div>':'')+'</div>';
-      // Property type
-      if (r.propertyType)          finHtml += '<div class="fin-card full"><div class="fin-lbl">🏘️ ఆస్తి రకం (Property Type)</div><div class="fin-val sm" style="color:var(--sky)">'+r.propertyType+(r.transactionType?' · '+r.transactionType:'')+'</div></div>';
+      if (r.vendorName)      finHtml += '<div class="fin-card full"><div class="fin-lbl">🏪 Vendor / Shop</div><div class="fin-val" style="color:var(--teal)">'+escH(r.vendorName)+'</div></div>';
+      if (r.itemDescription) finHtml += '<div class="fin-card full"><div class="fin-lbl">📦 Items / Work Done</div><div class="fin-val sm" style="white-space:pre-wrap">'+escH(r.itemDescription)+'</div></div>';
+      if (r.documentDate)    finHtml += '<div class="fin-card"><div class="fin-lbl">📅 Bill Date</div><div class="fin-val sm">'+escH(r.documentDate)+'</div></div>';
+      if (r.invoiceNumber)   finHtml += '<div class="fin-card"><div class="fin-lbl">🔢 Invoice No.</div><div class="fin-val sm" style="font-family:JetBrains Mono">'+escH(r.invoiceNumber)+'</div></div>';
+      if (r.amount)          finHtml += '<div class="fin-card invest"><div class="fin-lbl" style="color:var(--teal)">💰 Total Amount</div><div class="fin-val teal">'+escH(String(r.amount))+'</div></div>';
       finHtml += '</div>';
+    } else {
+      var hasAnyFin = fv(fin.saleAmount)||fv(fin.stampDuty)||fv(fin.totalInvestment);
+      if (hasAnyFin) {
+        finHtml = '<div class="fin-grid">';
+        if (fv(fin.saleAmount))      finHtml += '<div class="fin-card hl"><div class="fin-lbl">💰 విక్రయ మొత్తం (Sale Amount)'+cb(fc(fin.saleAmount))+'</div><div class="fin-val">'+fixAmountStr(fv(fin.saleAmount))+'</div>'+(ft(fin.saleAmount)?'<div class="fin-tel">'+ft(fin.saleAmount)+'</div>':'')+'</div>';
+        if (fv(fin.marketValue))     finHtml += '<div class="fin-card"><div class="fin-lbl">🏠 మార్కెట్ విలువ'+cb(fc(fin.marketValue))+'</div><div class="fin-val teal">'+fixAmountStr(fv(fin.marketValue))+'</div></div>';
+        if (fv(fin.stampDuty))       finHtml += '<div class="fin-card"><div class="fin-lbl">📋 స్టాంప్ డ్యూటీ (Stamp Duty)</div><div class="fin-val sm">'+fixAmountStr(fv(fin.stampDuty))+'</div></div>';
+        else                          finHtml += '<div class="fin-card" style="opacity:0.4"><div class="fin-lbl">📋 స్టాంప్ డ్యూటీ</div><div class="fin-val sm" style="color:var(--tx3)">Not in doc</div></div>';
+        if (fv(fin.registrationFee)) finHtml += '<div class="fin-card"><div class="fin-lbl">🏛️ రిజి. రుసుము (Reg Fee)</div><div class="fin-val sm">'+fixAmountStr(fv(fin.registrationFee))+'</div></div>';
+        else                          finHtml += '<div class="fin-card" style="opacity:0.4"><div class="fin-lbl">🏛️ రిజి. రుసుము</div><div class="fin-val sm" style="color:var(--tx3)">Not in doc</div></div>';
+        if (fv(fin.totalInvestment)) finHtml += '<div class="fin-card invest"><div class="fin-lbl" style="color:var(--teal)">💎 మొత్తం పెట్టుబడి = Sale + Stamp Duty + Reg Fee'+cb(fc(fin.totalInvestment))+'</div><div class="fin-val teal">'+fixAmountStr(fv(fin.totalInvestment))+'</div>'+(ft(fin.totalInvestment)?'<div class="fin-tel">'+ft(fin.totalInvestment)+'</div>':'')+'</div>';
+        if (r.propertyType)          finHtml += '<div class="fin-card full"><div class="fin-lbl">🏘️ ఆస్తి రకం (Property Type)</div><div class="fin-val sm" style="color:var(--sky)">'+r.propertyType+(r.transactionType?' · '+r.transactionType:'')+'</div></div>';
+        finHtml += '</div>';
+      }
     }
 
     // Ownership chain
@@ -2407,22 +2415,41 @@ async function callGemini(imageData, imageMime, docPromptOverride) {
 // ════════════════════════════════════════════════════════
 // DOCUMENT UPLOAD — handlePhoto
 // ════════════════════════════════════════════════════════
-var DOC_PROMPT = 'You are a specialist reading Andhra Pradesh property documents (Telugu and English).\n\n'
-  +'EXTENT RULE: 1 cent=48.4 sqyards. ALWAYS show as: "X sq yards (X ch.ga.) = Y.YY cents (Y.YY centlu)". Show BOTH always.\n\n'
-  +'DATE RULE: documentDate = date in FIRST LINE of this document (tedi: DD.MM.YYYY or Telugu words for date). NEVER use a previous owners purchase date. NEVER use todays date.\n\n'
-  +'FINANCIALS: saleAmount=consideration amount. stampDuty=tax (small). registrationFee=fee (small). totalInvestment=saleAmount+stampDuty+registrationFee. totalRegistrationCost=stampDuty+regFee only (NEVER equals saleAmount).\n\n'
-  +'PROPERTY TYPE: gruha vikrayam/house/building=House. Plot/site=Plot. Agricultural=Agricultural. Land only=Land. pricePerCent: only for Land/Plot/Agricultural, null for House.\n\n'
-  +'FIELDS TO EXTRACT (extract all visible): Document Number, Registration Date, Property Type, Transaction Type, Sub-Registrar Office, District, Mandal, Village/Locality, Ward Number, Door Number, Survey Number, Land Extent (MUST show sq yards AND cents both), Built-up Area (sq feet), Seller Full Name, Seller Address, Seller Phone (సెల్ నెం.), Seller Aadhaar (full 12 digits), Buyer Full Name, Buyer Address, Buyer Phone (సెల్ నెం.), Buyer Aadhaar (full 12 digits), Sale Amount, Market Value, Stamp Duty, Registration Fee, Witnesses, Boundaries (East/West/North/South).\n\nPHONE vs AADHAAR RULE: Aadhaar=12 digits (e.g. 935805283619), Phone=10 digits starting with 6/7/8/9 (e.g. 8886084008). NEVER mix. Label sel No.=phone, Aadhaar No.=aadhaar. Store separately in sellerPhone/buyerPhone and sellerAadhaar/buyerAadhaar.\n\n'
-  +'OWNERSHIP CHAIN: Extract ALL transactions from endorsement pages. '
-  +'ownershipChain[0]=CURRENT (this document, most recent seller to buyer). '
-  +'ownershipChain[1]=Previous transaction. ownershipChain[2]=Before that. '
-  +'NEVER return only 1 entry if document has multiple transactions.\n\n'
-  +'CONFIDENCE: 100=exact text found, 80+=clear, 60-79=calculated, under60=uncertain.\n\n'
-  +'Return ONLY valid JSON:\n'
-  +'{"docType":"Registration","transactionType":"Sale","propertyType":"House","documentDate":"DD.MM.YYYY","language":"Telugu","summary":"summary","confidence":90,'
-  +'"fields":[{"key":"field name Telugu (English)","value":"value","confidence":95,"alert":false}],'
-  +'"financials":{"saleAmount":{"value":"Rs. X/-","telugu":"Ru. X/-","confidence":95},"marketValue":{"value":"Rs. X/-","telugu":"Ru. X/-","confidence":85},"stampDuty":{"value":"Rs. X/-","telugu":"Ru. X/-","confidence":95},"registrationFee":{"value":"Rs. X/-","telugu":"Ru. X/-","confidence":95},"totalRegistrationCost":{"value":"Rs. X/-","telugu":"Ru. X/-","confidence":90},"totalInvestment":{"value":"Rs. X/-","telugu":"Ru. X/-","confidence":95},"pricePerCent":{"value":null,"telugu":null,"confidence":0},"pricePerSqyard":{"value":null,"telugu":null,"confidence":0}},'
-  +'"ownershipChain":[{"order":1,"seller":"name","buyer":"name","sellerPhone":"10-digit phone or empty","buyerPhone":"10-digit phone or empty","date":"DD.MM.YYYY","regNumber":"X/YYYY","amount":"Rs. X/-","surveyNumber":"X/X","extent":"X sq yards = Y cents","confidence":95}],'
+var DOC_PROMPT = 'You are an expert document reader for a construction site manager in Andhra Pradesh, India.\n\n'
+  +'STEP 1 — DETECT DOCUMENT TYPE FIRST. Read the entire document carefully before classifying:\n'
+  +'→ docType="Registration" if: contains "విక్రయ పత్రం", "Sale Deed", "Sub-Registrar", "Stamp Duty", "Registration Fee", "నమోదు పత్రం", "రిజిస్ట్రేషన్"\n'
+  +'→ docType="Agreement" if: contains "Agreement", "అగ్రిమెంట్", "MOU", "Agreement to Sell"\n'
+  +'→ docType="Bill" if: it is a bill, invoice, receipt, quotation, or work order for materials or services (e.g. Borewell, Steel, Cement, Sand, Labour, Electrical, Plumbing, Tiles, Paint, Hardware, etc.)\n'
+  +'→ docType="Other" for anything else\n\n'
+  +'STEP 2 — EXTRACT FIELDS BASED ON DETECTED TYPE:\n\n'
+  +'══ IF Registration or Agreement ══\n'
+  +'EXTENT RULE: 1 cent=48.4 sqyards. ALWAYS show: "X sq yards (X ch.ga.) = Y.YY cents". Show BOTH.\n'
+  +'DATE RULE: documentDate = date in FIRST LINE only. NEVER use previous owner dates or today.\n'
+  +'FINANCIALS: saleAmount=consideration amount. stampDuty=small tax. registrationFee=small fee. totalInvestment=saleAmount+stampDuty+registrationFee. totalRegistrationCost=stampDuty+regFee ONLY.\n'
+  +'PROPERTY TYPE: gruha vikrayam/house/building=House. Plot/site=Plot. Agricultural=Agricultural. Land only=Land.\n'
+  +'PHONE vs AADHAAR: Aadhaar=exactly 12 digits. Phone=exactly 10 digits starting 6/7/8/9. NEVER mix these two.\n'
+  +'FIELDS: Document Number, Registration Date, Property Type, Transaction Type, Sub-Registrar Office, District, Mandal, Village, Survey Number, Land Extent, Built-up Area, Seller Name, Seller Phone, Seller Aadhaar, Buyer Name, Buyer Phone, Buyer Aadhaar, Sale Amount, Market Value, Stamp Duty, Registration Fee, Witnesses, Boundaries (E/W/N/S).\n'
+  +'OWNERSHIP CHAIN: Extract ALL transactions. ownershipChain[0]=current (latest seller→buyer). ownershipChain[1]=previous. Etc.\n\n'
+  +'══ IF Bill / Invoice / Receipt ══\n'
+  +'Extract these fields into the TOP-LEVEL JSON (not inside financials):\n'
+  +'  vendorName: company or shop name issuing the bill\n'
+  +'  invoiceNumber: bill/invoice/receipt number\n'
+  +'  documentDate: bill date as DD.MM.YYYY\n'
+  +'  amount: total payable amount as plain string e.g. "Rs. 45,000"\n'
+  +'  itemDescription: what was purchased/done — be specific, e.g. "Borewell drilling 180ft @ Rs.250/ft", "TMT Steel 10mm 500kg @ Rs.65/kg"\n'
+  +'  quantity: numeric quantity if mentioned\n'
+  +'  unit: unit of measurement (ft, kg, bags, sqft, etc.)\n'
+  +'  unitRate: rate per unit if mentioned\n'
+  +'  gstAmount: GST/tax amount if shown\n'
+  +'  summary: one-line description e.g. "Borewell bill — XYZ Drilling — Rs.45,000 for 180ft drilling"\n'
+  +'Set ownershipChain=[] and financials all null for bills.\n\n'
+  +'CONFIDENCE: 100=exact text found, 80+=clear, 60-79=inferred, <60=uncertain.\n\n'
+  +'Return ONLY valid JSON, no markdown, no explanation:\n'
+  +'{"docType":"Registration|Agreement|Bill|Other","transactionType":"Sale|Service|null","propertyType":"House|Plot|Land|Agricultural|null","documentDate":"DD.MM.YYYY","language":"Telugu|English|Mixed","summary":"1-line summary","confidence":90,'
+  +'"vendorName":null,"invoiceNumber":null,"amount":null,"itemDescription":null,"quantity":null,"unit":null,"unitRate":null,"gstAmount":null,'
+  +'"fields":[{"key":"field name","value":"value","confidence":95,"alert":false}],'
+  +'"financials":{"saleAmount":{"value":null,"telugu":null,"confidence":0},"marketValue":{"value":null,"telugu":null,"confidence":0},"stampDuty":{"value":null,"telugu":null,"confidence":0},"registrationFee":{"value":null,"telugu":null,"confidence":0},"totalRegistrationCost":{"value":null,"telugu":null,"confidence":0},"totalInvestment":{"value":null,"telugu":null,"confidence":0},"pricePerCent":{"value":null,"telugu":null,"confidence":0},"pricePerSqyard":{"value":null,"telugu":null,"confidence":0}},'
+  +'"ownershipChain":[{"order":1,"seller":"name","buyer":"name","sellerPhone":"","buyerPhone":"","date":"DD.MM.YYYY","regNumber":"X/YYYY","amount":"Rs. X/-","surveyNumber":"X/X","extent":"X sq yards = Y cents","confidence":95}],'
   +'"alerts":[{"message":"alert text","severity":"high"}]}';
 
 async function handlePhoto(e, source) {
@@ -2507,7 +2534,8 @@ async function handlePhoto(e, source) {
     var isDuplicate = false;
     var dupReason = '';
 
-    if (result.documentNumber || result.docNumber) {
+    // Check 1: Document number match (Registration/Agreement only)
+    if (!isDuplicate && (result.docType === 'Registration' || result.docType === 'Agreement')) {
       var docNum = String(result.documentNumber || result.docNumber || '').trim();
       if (docNum && docNum !== '—' && docNum !== 'N/A') {
         var existing = state.documents.find(function(d){
@@ -2519,8 +2547,8 @@ async function handlePhoto(e, source) {
       }
     }
 
-    // Check by seller + buyer + date combination
-    if (!isDuplicate && result.ownershipChain && result.ownershipChain[0]) {
+    // Check 2: Seller + buyer + date combo (Registration/Agreement only)
+    if (!isDuplicate && (result.docType === 'Registration' || result.docType === 'Agreement') && result.ownershipChain && result.ownershipChain[0]) {
       var chain0 = result.ownershipChain[0];
       var seller0 = (chain0.seller||'').trim().toLowerCase();
       var buyer0  = (chain0.buyer||'').trim().toLowerCase();
@@ -2538,25 +2566,45 @@ async function handlePhoto(e, source) {
       }
     }
 
-    // Check bills: same vendor + same amount + same file name
+    // Check 3: Bill — same vendor + same amount
     if (!isDuplicate && (result.docType === 'Bill' || result.docType === 'Receipt')) {
       var billVendor = (result.vendorName || '').trim().toLowerCase();
       var billAmt = String(result.amount || '').replace(/[^0-9]/g,'');
-      var existing3 = state.documents.find(function(d){
-        if (d.fileName === file.name) return true; // same filename
-        var r2 = d.result || {};
-        if (!billVendor || !billAmt) return false;
-        var v2 = (r2.vendorName||'').trim().toLowerCase();
-        var a2 = String(r2.amount||'').replace(/[^0-9]/g,'');
-        return v2 === billVendor && a2 === billAmt && a2.length > 2;
-      });
-      if (existing3) { isDuplicate = true; dupReason = 'Same bill (vendor+amount) already uploaded'; }
+      if (billVendor && billAmt && billAmt.length > 2) {
+        var existing3 = state.documents.find(function(d){
+          var r2 = d.result || {};
+          var v2 = (r2.vendorName||'').trim().toLowerCase();
+          var a2 = String(r2.amount||'').replace(/[^0-9]/g,'');
+          return v2 === billVendor && a2 === billAmt;
+        });
+        if (existing3) { isDuplicate = true; dupReason = 'Same bill (vendor+amount) already uploaded'; }
+      }
     }
 
-    // Same filename check for all docs
+    // Check 4: Same filename — but allow Drive re-upload if user confirms
+    // (handles case where file was manually deleted from Drive but local record exists)
     if (!isDuplicate) {
-      var existingFile = state.documents.find(function(d){ return d.fileName === file.name; });
-      if (existingFile) { isDuplicate = true; dupReason = 'File "' + file.name + '" already uploaded'; }
+      var existingByName = state.documents.find(function(d){ return d.fileName === file.name; });
+      if (existingByName) {
+        hideProc();
+        var driveNote = existingByName.driveUploaded
+          ? 'Drive లో upload అయింది కానీ manually delete చేశారా?'
+          : 'Drive upload status తెలియదు.';
+        var reUpload = confirm(
+          '⚠️ "' + file.name + '" ఇప్పటికే ఉంది locally.\n\n'
+          + driveNote + '\n\n'
+          + 'Google Drive కి మళ్ళీ upload చేయాలా?\n'
+          + '(OK = Re-upload to Drive only, Cancel = Skip)'
+        );
+        if (reUpload) {
+          toast('📁 Re-uploading to Drive...', 'info');
+          await compressAndUpload(file, (existingByName.result && existingByName.result.docType) || 'Other', existingByName.result || {}, existingByName);
+          toast('✅ Drive re-upload complete!', 'ok');
+        } else {
+          toast('Upload skipped.', 'info');
+        }
+        return;
+      }
     }
 
     if (isDuplicate) {
@@ -2650,6 +2698,7 @@ async function handlePhoto(e, source) {
 
 function buildDocResultHtml(r) {
   var fin = r.financials || {};
+  var isBill = r.docType === 'Bill' || r.docType === 'Receipt';
   var isLand = r.propertyType==='Land'||r.propertyType==='Plot'||r.propertyType==='Agricultural';
   function fv(f){
     if (!f) return null;
@@ -2664,10 +2713,49 @@ function buildDocResultHtml(r) {
   function fc(f){ return f?(typeof f==='object'?(f.confidence||100):100):100; }
   function cb(c){ return c<70?' <span style="font-size:10px;color:var(--rose)">('+c+'%)</span>':c<85?' <span style="font-size:10px;color:var(--amb)">('+c+'%)</span>':''; }
 
-  var html = '<b class="'+(r.docType==='Registration'?'inf':r.docType==='Agreement'?'wrn':'ok')+'">📄 '+(r.docType||'Document')+'</b><br>'
+  var docEmoji = isBill ? '🧾' : r.docType==='Registration' ? '🏛️' : r.docType==='Agreement' ? '📝' : '📄';
+  var html = '<b class="'+(r.docType==='Registration'?'inf':r.docType==='Agreement'?'wrn':'ok')+'">'+docEmoji+' '+(r.docType||'Document')+'</b><br>'
     +'<span style="font-size:13px;color:var(--tx2)">'+(r.summary||'')+'</span>';
 
-  // Financials
+  // ── BILL LAYOUT ──
+  if (isBill) {
+    html += '<div class="ccard" style="margin-top:10px"><div class="ccard-t">🧾 Bill Details (బిల్లు వివరాలు)</div>';
+    if (r.vendorName)      html += '<div class="crow"><span class="ck">🏪 Vendor / Shop</span><span class="cv ok" style="font-weight:700">'+escH(r.vendorName)+'</span></div>';
+    if (r.invoiceNumber)   html += '<div class="crow"><span class="ck">🔢 Invoice / Bill No.</span><span class="cv" style="font-family:JetBrains Mono">'+escH(r.invoiceNumber)+'</span></div>';
+    if (r.documentDate)    html += '<div class="crow"><span class="ck">📅 Bill Date</span><span class="cv">'+escH(r.documentDate)+'</span></div>';
+    if (r.itemDescription) html += '<div class="crow"><span class="ck">📦 Items / Work Done</span><span class="cv" style="white-space:pre-wrap;line-height:1.5">'+escH(r.itemDescription)+'</span></div>';
+    if (r.quantity && r.unit) html += '<div class="crow"><span class="ck">📏 Quantity</span><span class="cv">'+escH(String(r.quantity))+' '+escH(r.unit)+'</span></div>';
+    if (r.unitRate)        html += '<div class="crow"><span class="ck">💲 Rate per unit</span><span class="cv">'+escH(String(r.unitRate))+'</span></div>';
+    if (r.gstAmount)       html += '<div class="crow"><span class="ck">🏷️ GST / Tax</span><span class="cv">'+escH(String(r.gstAmount))+'</span></div>';
+    if (r.amount)          html += '<div class="crow" style="border-top:1px solid var(--bd);padding-top:10px;margin-top:4px"><span class="ck" style="color:var(--teal);font-weight:700">💰 Total Amount</span><span class="cv" style="color:var(--teal);font-size:16px;font-weight:700">'+escH(String(r.amount))+'</span></div>';
+    html += '</div>';
+
+    if (r.fields && r.fields.length) {
+      html += '<div class="ccard" style="margin-top:10px"><div class="ccard-t">📋 All Fields</div>';
+      r.fields.forEach(function(f){
+        var conf = f.confidence||100;
+        var cs = conf<70?'color:var(--rose)':conf<85?'color:var(--amb)':'';
+        var ct = conf<85?' <span style="font-size:10px;opacity:0.7">('+conf+'%)</span>':'';
+        var rawV = f.value; var displayV = '';
+        if (rawV && typeof rawV === 'object') displayV = String(rawV.value||rawV.telugu||'—');
+        else displayV = String(rawV||'—');
+        html += '<div class="crow"><span class="ck">'+escH(f.key||'')+'</span><span class="cv '+(f.alert?'w':'')+'" style="'+cs+'">'+escH(displayV)+ct+'</span></div>';
+      });
+      html += '</div>';
+    }
+
+    if (r.alerts && r.alerts.length) {
+      r.alerts.forEach(function(a){
+        var msg = typeof a==='object'?a.message:a;
+        var sev = typeof a==='object'?a.severity:'medium';
+        html += '<div style="margin-top:6px;background:rgba(232,184,74,0.08);border:1px solid rgba(232,184,74,0.3);border-radius:9px;padding:10px 12px;font-size:13px;color:'+(sev==='high'?'var(--rose)':'var(--amb)')+'">'
+          +'<b style="display:block;margin-bottom:3px">⚠️ గమనించండి</b>'+escH(msg)+'</div>';
+      });
+    }
+    return html;
+  }
+
+  // ── REGISTRATION / AGREEMENT LAYOUT ──
   if (fv(fin.saleAmount)||fv(fin.totalInvestment)) {
     html += '<div class="ccard" style="margin-top:10px"><div class="ccard-t">💰 Financial Details (ఆర్థిక వివరాలు)</div>';
     if(fixAmountStr(fv(fin.saleAmount)))      html+='<div class="crow"><span class="ck">💰 విక్రయ మొత్తం</span><span class="cv ok">'+fixAmountStr(fv(fin.saleAmount))+cb(fc(fin.saleAmount))+'</span></div>';
@@ -2675,11 +2763,10 @@ function buildDocResultHtml(r) {
     html+='<div class="crow"><span class="ck">📋 స్టాంప్ డ్యూటీ</span><span class="cv w">'+(fv(fin.stampDuty)||'<span style="color:var(--tx3)">Not in doc</span>')+'</span></div>';
     html+='<div class="crow"><span class="ck">🏛️ రిజి. రుసుము</span><span class="cv">'+(fv(fin.registrationFee)||'<span style="color:var(--tx3)">Not in doc</span>')+'</span></div>';
     if(fixAmountStr(fv(fin.totalInvestment))) html+='<div class="crow" style="border-top:1px solid var(--bd2);padding-top:8px"><span class="ck" style="color:var(--teal)">💎 మొత్తం పెట్టుబడి</span><span class="cv" style="color:var(--teal);font-size:14px">'+fixAmountStr(fv(fin.totalInvestment))+cb(fc(fin.totalInvestment))+'</span></div>';
-    if(r.propertyType)          html+='<div class="crow"><span class="ck">🏘️ ఆస్తి రకం</span><span class="cv" style="color:var(--sky)">'+r.propertyType+(r.transactionType?' · '+r.transactionType:'')+'</span></div>';
+    if(r.propertyType) html+='<div class="crow"><span class="ck">🏘️ ఆస్తి రకం</span><span class="cv" style="color:var(--sky)">'+r.propertyType+(r.transactionType?' · '+r.transactionType:'')+'</span></div>';
     html += '</div>';
   }
 
-  // Ownership chain
   if (r.ownershipChain && r.ownershipChain.length) {
     var cnt = r.ownershipChain.length;
     html += '<div class="ccard" style="margin-top:10px"><div class="ccard-t">🔗 Ownership Chain · యాజమాన్య చరిత్ర ('+cnt+' transaction'+(cnt>1?'s':'')+')</div>';
@@ -2705,19 +2792,20 @@ function buildDocResultHtml(r) {
     html += '</div>';
   }
 
-  // Fields
   if (r.fields && r.fields.length) {
     html += '<div class="ccard" style="margin-top:10px"><div class="ccard-t">📋 All Details</div>';
     r.fields.forEach(function(f){
       var conf = f.confidence||100;
       var cs = conf<70?'color:var(--rose)':conf<85?'color:var(--amb)':'';
       var ct = conf<85?' <span style="font-size:10px;opacity:0.7">('+conf+'%)</span>':'';
-      html += '<div class="crow"><span class="ck">'+escH(f.key||'')+'</span><span class="cv '+(f.alert?'w':'')+'" style="'+cs+'">'+escH(f.value||'—')+ct+'</span></div>';
+      var rawV = f.value; var displayV = '';
+      if (rawV && typeof rawV === 'object') displayV = String(rawV.value||rawV.telugu||'—');
+      else displayV = String(rawV||'—');
+      html += '<div class="crow"><span class="ck">'+escH(f.key||'')+'</span><span class="cv '+(f.alert?'w':'')+'" style="'+cs+'">'+escH(displayV)+ct+'</span></div>';
     });
     html += '</div>';
   }
 
-  // Alerts
   if (r.alerts && r.alerts.length) {
     r.alerts.forEach(function(a){
       var msg = typeof a==='object'?a.message:a;
