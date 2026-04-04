@@ -813,13 +813,25 @@ body{background:var(--bg);color:var(--tx);font-family:'Noto Sans Telugu',sans-se
           <span>👥 Contacts · పరిచయాలు</span>
           <button class="btn amb sm" onclick="openModal('add-contact')">+ Add</button>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-bottom:12px">
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px">
           <button class="btn ghost sm" id="cf-all" onclick="filterContacts('all')" style="font-size:11px;border-color:var(--amb);color:var(--amb)">All</button>
-          <button class="btn ghost sm" id="cf-buyer" onclick="filterContacts('buyer')" style="font-size:11px">Buyers</button>
-          <button class="btn ghost sm" id="cf-seller" onclick="filterContacts('seller')" style="font-size:11px">Sellers</button>
+          <button class="btn ghost sm" id="cf-Sand" onclick="filterContacts('Sand')" style="font-size:11px">🪨 Sand</button>
+          <button class="btn ghost sm" id="cf-Steel" onclick="filterContacts('Steel')" style="font-size:11px">🔩 Steel</button>
+          <button class="btn ghost sm" id="cf-Cement" onclick="filterContacts('Cement')" style="font-size:11px">🏗️ Cement</button>
+          <button class="btn ghost sm" id="cf-Electrical" onclick="filterContacts('Electrical')" style="font-size:11px">⚡ Elec</button>
+          <button class="btn ghost sm" id="cf-Labour" onclick="filterContacts('Labour')" style="font-size:11px">👷 Labour</button>
+          <button class="btn ghost sm" id="cf-Hardware" onclick="filterContacts('Hardware')" style="font-size:11px">🔧 HW</button>
+          <button class="btn ghost sm" id="cf-Other" onclick="filterContacts('Other')" style="font-size:11px">📦 Other</button>
+        </div>
+        <!-- Quick AI queries -->
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+          <button class="chip" onclick="askCheapest('Sand')" style="font-size:11px">🪨 Cheapest Sand?</button>
+          <button class="chip" onclick="askCheapest('Steel')" style="font-size:11px">🔩 Cheapest Steel?</button>
+          <button class="chip" onclick="askCheapest('Cement')" style="font-size:11px">🏗️ Cheapest Cement?</button>
+          <button class="chip" onclick="askCheapest('Electrical')" style="font-size:11px">⚡ Electrical Vendor?</button>
         </div>
         <div id="contact-list">
-          <div class="empty"><div class="ei">👥</div><div class="et">Contacts లేవు</div><div class="es">Documents scan చేస్తే auto-add అవుతారు<br>లేదా manually add చేయండి</div></div>
+          <div class="empty"><div class="ei">👥</div><div class="et">Contacts లేవు</div><div class="es">Bills/Docs scan చేయండి లేదా AI Chat లో vendor పేరు చెప్పండి</div></div>
         </div>
       </div>
     </div>
@@ -1622,7 +1634,12 @@ var DATA_KEY = 'nirmit_data_v1';
 function loadCfg()  { return STORE.get(CFG_KEY)  || {}; }
 function saveCfg()  { STORE.set(CFG_KEY, cfg); }
 function loadData() { return STORE.get(DATA_KEY) || freshData(); }
-function saveData() { STORE.set(DATA_KEY, state); }
+function saveData() {
+  // documents are session-only (cleared on app close) — rebuilt from Sheet on sync
+  var toSave = Object.assign({}, state);
+  toSave.documents = [];
+  STORE.set(DATA_KEY, toSave);
+}
 function freshData(){ return {entries:[],vendors:{},priceHistory:{},billPriceHistory:{},documents:[],projects:[],contacts:[],nextId:1,chatHistory:[],lastSync:null}; }
 
 // ════════════════════════════════════════════════════════
@@ -1845,7 +1862,7 @@ function syncFromSheet() {
 }
 
 function mergeSheetData(sheetData) {
-  // Merge Entries
+  // ── Merge Entries ──
   if (sheetData.Entries && sheetData.Entries.length > 1) {
     var hdrs = sheetData.Entries[0];
     var rows = sheetData.Entries.slice(1);
@@ -1862,23 +1879,22 @@ function mergeSheetData(sheetData) {
     });
   }
 
-  // Merge Contacts — restore on new phone
+  // ── Merge Contacts (full restore including new price-intel columns) ──
   if (sheetData.Contacts && sheetData.Contacts.length > 1) {
     var cHdrs = sheetData.Contacts[0];
     var cRows = sheetData.Contacts.slice(1);
     if (!state.contacts) state.contacts = [];
-    var localCIds = new Set(state.contacts.map(function(c){ return c.id; }));
+    // Full replace from sheet — sheet is source of truth for contacts
+    state.contacts = [];
     cRows.forEach(function(r){
       var obj = {};
       cHdrs.forEach(function(h,i){ obj[h]=r[i]; });
-      if (obj.id && !localCIds.has(obj.id)) {
-        state.contacts.push(obj);
-      }
+      if (obj.id && obj.name) state.contacts.push(obj);
     });
     renderContacts();
   }
 
-  // Merge Projects — restore on new phone
+  // ── Merge Projects ──
   if (sheetData.Projects && sheetData.Projects.length > 1) {
     var pHdrs = sheetData.Projects[0];
     var pRows = sheetData.Projects.slice(1);
@@ -1888,7 +1904,6 @@ function mergeSheetData(sheetData) {
       var obj = {};
       pHdrs.forEach(function(h,i){ obj[h]=r[i]; });
       if (obj.id && !localPIds.has(obj.id)) {
-        // Restore project with empty houses array if not present
         if (!obj.houses) obj.houses = [];
         if (!obj.agreements) obj.agreements = [];
         state.projects.push(obj);
@@ -1897,6 +1912,82 @@ function mergeSheetData(sheetData) {
     renderProjects();
   }
 
+  // ── Rebuild billPriceHistory from BillItems sheet (PERMANENT PRICE DATABASE) ──
+  if (sheetData.BillItems && sheetData.BillItems.length > 1) {
+    var biHdrs = sheetData.BillItems[0];
+    var biRows = sheetData.BillItems.slice(1);
+    // Full rebuild — sheet is the authoritative source
+    state.billPriceHistory = {};
+    biRows.forEach(function(r){
+      var obj = {};
+      biHdrs.forEach(function(h,i){ obj[h]=r[i]; });
+      var key = (obj.itemKey||'').toString().trim().toLowerCase().replace(/\s+/g,'_');
+      if (!key) return;
+      if (!state.billPriceHistory[key]) state.billPriceHistory[key] = [];
+      state.billPriceHistory[key].push({
+        date:     obj.date||'',
+        vendor:   obj.vendorName||'',
+        itemName: obj.itemName||'',
+        unitRate: Number(obj.unitRate)||0,
+        lineTotal:Number(obj.lineTotal)||0,
+        quantity: Number(obj.quantity)||0,
+        unit:     obj.unit||'',
+        docId:    obj.docId||'',
+        confidence: Number(obj.confidence)||80
+      });
+    });
+  }
+
+  // ── Rebuild documents list from BillHeaders + Documents sheet ──
+  // Documents are session-only in localStorage but restored from sheet on sync
+  state.documents = [];
+
+  if (sheetData.BillHeaders && sheetData.BillHeaders.length > 1) {
+    var bhHdrs = sheetData.BillHeaders[0];
+    var bhRows = sheetData.BillHeaders.slice(1);
+    bhRows.forEach(function(r){
+      var obj = {};
+      bhHdrs.forEach(function(h,i){ obj[h]=r[i]; });
+      if (!obj.docId) return;
+      state.documents.push({
+        id: obj.docId,
+        date: obj.date||'',
+        fileName: obj.fileName||'',
+        type: 'Bill',
+        propertyType: '',
+        result: {
+          docType: 'Bill',
+          vendorName: obj.vendorName||'',
+          vendorPhone: obj.vendorPhone||'',
+          invoiceNumber: obj.invoiceNumber||'',
+          amount: obj.billTotal||'',
+          gstAmount: obj.gstAmount||'',
+          summary: obj.summary||'',
+          lineItems: [] // line items available in billPriceHistory by docId if needed
+        }
+      });
+    });
+  }
+
+  if (sheetData.Documents && sheetData.Documents.length > 1) {
+    var dHdrs = sheetData.Documents[0];
+    var dRows = sheetData.Documents.slice(1);
+    dRows.forEach(function(r){
+      var obj = {};
+      dHdrs.forEach(function(h,i){ obj[h]=r[i]; });
+      if (!obj.id) return;
+      state.documents.push({
+        id: obj.id,
+        date: obj.date||'',
+        fileName: obj.fileName||'',
+        type: obj.type||'Document',
+        propertyType: obj.propertyType||'',
+        result: { docType: obj.type||'Document', summary: obj.summary||'' }
+      });
+    });
+  }
+
+  renderDocList();
   refreshUI();
 }
 
@@ -1919,9 +2010,17 @@ function addEntry(entry) {
   } else if (entry.type === 'payment') {
     state.vendors[entry.vendor].totalPaid = (state.vendors[entry.vendor].totalPaid||0) + Number(entry.amount||0);
   }
-  // Auto-add vendor to contacts if phone number present
-  if (entry.phone && entry.vendor) {
-    autoAddVendorContact(entry.vendor, entry.phone, entry.category, entry.description, entry.date);
+  // Always upsert contact — even without phone, price+category+date is valuable intelligence
+  if (entry.vendor) {
+    upsertContact({
+      name: entry.vendor,
+      phone: entry.phone || '',
+      category: entry.category || '',
+      lastPrice: entry.type === 'order' ? Number(entry.amount||0) : 0,
+      lastPriceUnit: entry.priceUnit || entry.unit || '',
+      lastPriceDate: entry.date,
+      source: 'entry'
+    });
   }
   saveData(); refreshUI();
   pushToSheet('Entries',
@@ -1930,36 +2029,91 @@ function addEntry(entry) {
   );
 }
 
-function autoAddVendorContact(name, phone, category, notes, date) {
+// ════════════════════════════════════════════════════════
+// MASTER CONTACT UPSERT — single function for all sources
+// Sources: chat entry, bill scan, registration scan, manual
+// ════════════════════════════════════════════════════════
+function upsertContact(opts) {
+  // opts: { name, phone, category, lastPrice, lastPriceUnit, lastPriceDate, address, notes, source }
+  if (!opts || !opts.name || opts.name.trim().length < 2) return;
   if (!state.contacts) state.contacts = [];
-  // Check if already exists by name or phone
-  var exists = state.contacts.find(function(c){
-    return c.name.toLowerCase()===name.toLowerCase() || (phone && c.phone===phone);
+
+  var name    = opts.name.trim().substring(0, 80);
+  var phone   = '';
+  if (opts.phone) {
+    var ph = String(opts.phone).replace(/[^0-9]/g, '');
+    if (/^[6-9][0-9]{9}$/.test(ph)) phone = ph;
+  }
+  var address   = (opts.address || '').trim().substring(0, 100);
+  var category  = opts.category || '';
+  var lastPrice = Number(opts.lastPrice) || 0;
+  var lastPriceUnit = opts.lastPriceUnit || '';
+  var lastPriceDate = opts.lastPriceDate || '';
+
+  // Find existing by name (primary) or phone (secondary)
+  var exists = state.contacts.find(function(c) {
+    var nameMatch = c.name.toLowerCase() === name.toLowerCase();
+    var phoneMatch = phone && c.phone && c.phone === phone;
+    return nameMatch || phoneMatch;
   });
+
   if (exists) {
-    // Update phone if missing
-    if (phone && !exists.phone) { exists.phone = phone; saveData(); renderContacts(); }
+    var updated = false;
+    if (phone && !exists.phone)           { exists.phone = phone; updated = true; }
+    if (address && !exists.address)       { exists.address = address; updated = true; }
+    if (category && !exists.category)     { exists.category = category; updated = true; }
+    // Always update price info if new data is better (more recent or first time)
+    if (lastPrice > 0) {
+      exists.lastPrice     = lastPrice;
+      exists.lastPriceUnit = lastPriceUnit || exists.lastPriceUnit || '';
+      exists.lastPriceDate = lastPriceDate || exists.lastPriceDate || '';
+      exists.totalBusiness = (Number(exists.totalBusiness) || 0) + lastPrice;
+      updated = true;
+    }
+    if (updated) {
+      saveData();
+      renderContacts();
+      pushToSheet('Contacts',
+        ['id','name','phone','category','lastPrice','lastPriceUnit','lastPriceDate','totalBusiness','address','notes','addedDate'],
+        [exists.id, exists.name, exists.phone||'', exists.category||'', exists.lastPrice||'',
+         exists.lastPriceUnit||'', exists.lastPriceDate||'', exists.totalBusiness||'',
+         exists.address||'', exists.notes||'', exists.addedDate||today()]
+      );
+      if (phone && !exists.phone) toast(name + ' contact updated ✓', 'ok');
+    }
     return;
   }
+
+  // New contact
   var newContact = {
-    id: 'con_'+Date.now(),
+    id: 'con_' + Date.now() + Math.random().toString(36).slice(2,5),
     name: name,
-    phone: phone || '',
-    role: 'vendor',
-    address: '',
-    notes: (category||'') + (notes?' · '+notes.substring(0,60):'') + (date?' · '+date:''),
-    addedDate: date || today(),
-    autoAdded: true
+    phone: phone,
+    category: category,
+    lastPrice: lastPrice || '',
+    lastPriceUnit: lastPriceUnit,
+    lastPriceDate: lastPriceDate,
+    totalBusiness: lastPrice || 0,
+    address: address,
+    notes: opts.notes || '',
+    addedDate: today(),
+    source: opts.source || 'manual'
   };
   state.contacts.push(newContact);
   saveData();
   renderContacts();
-  // Push to Google Sheet
   pushToSheet('Contacts',
-    ['id','name','phone','role','address','notes','addedDate'],
-    [newContact.id, newContact.name, newContact.phone, newContact.role, newContact.address, newContact.notes, newContact.addedDate]
+    ['id','name','phone','category','lastPrice','lastPriceUnit','lastPriceDate','totalBusiness','address','notes','addedDate'],
+    [newContact.id, newContact.name, newContact.phone, newContact.category,
+     newContact.lastPrice, newContact.lastPriceUnit, newContact.lastPriceDate,
+     newContact.totalBusiness, newContact.address, newContact.notes, newContact.addedDate]
   );
-  toast(name + ' Contacts లో add అయ్యారు', 'ok');
+  toast(name + ' Contacts లో add అయ్యారు' + (phone ? ' 📞' : '') + ' ✓', 'ok');
+}
+
+// Legacy shim — keep old call sites working
+function autoAddVendorContact(name, phone, category, notes, date) {
+  upsertContact({name:name, phone:phone, category:category, notes:notes, source:'entry'});
 }
 
 // ════════════════════════════════════════════════════════
@@ -2279,12 +2433,16 @@ function clearDocs() {
 function clearTxns() {
   if (!confirm('Delete all transactions locally? Sheet data stays safe.')) return;
   state.entries=[]; state.vendors={}; state.priceHistory={}; state.chatHistory=[];
-  saveData(); refreshUI(); toast('Transactions cleared', 'ok');
+  saveData(); refreshUI();
+  toast('Transactions cleared. Sheet నుండి restore చేస్తున్నాం...', 'info');
+  setTimeout(function(){ syncFromSheet(); }, 400);
 }
 
 function clearAll() {
   if (!confirm('Delete ALL local data? Sheet data stays safe.')) return;
-  state = freshData(); saveData(); refreshUI(); renderDocList(); toast('All data cleared', 'ok');
+  state = freshData(); saveData(); refreshUI(); renderDocList();
+  toast('Data cleared. Sheet నుండి contacts & data restore చేస్తున్నాం...', 'info');
+  setTimeout(function(){ syncFromSheet(); }, 400);
 }
 
 // ════════════════════════════════════════════════════════
@@ -2375,7 +2533,15 @@ async function callGemini(imageData, imageMime, docPromptOverride) {
   var systemText = 'You are SiteBook AI, an expert construction site manager and cost controller for a builder from Kadapa, Andhra Pradesh. '
     +'He builds small houses on 3-cent plots. He speaks Telugu and English. Reply in the same language he uses.\n'
     +'Answer questions based ONLY on the provided project data. Show numbers when possible. Be short and practical.\n\n'
-    +'FULL PROJECT DATA: '+ledgerCtx+'\n\n'
+    +'FULL PROJECT DATA (vendors, contacts, expenses, bills, price history): '+ledgerCtx+'\n\n'
+    +'CONTACTS & VENDOR INTELLIGENCE:\n'
+    +'- contacts[] has: name, phone, category, lastPrice, lastPriceUnit, lastPriceDate, totalBusiness\n'
+    +'- Phone lookup: check BOTH vendors[].phone AND contacts[].phone, case-insensitive partial match\n'
+    +'- Price lookup: contacts[].lastPrice + lastPriceDate + lastPriceUnit per vendor\n'
+    +'- Category filter: contacts[].category = Sand/Steel/Cement/Electrical/Labour/Hardware\n'
+    +'- billPriceHistory has full item-level price history across ALL bills ever scanned\n'
+    +'- For "who sells sand cheapest" → check contacts where category=Sand, compare lastPrice\n'
+    +'- Never say "not in data" without checking vendors[], contacts[], and billPriceHistory\n\n'
     +'ANDHRA MARKET RATES (Kadapa):\n'
     +'- Sand: Rs.1800-3500/tractor\n- TMT Steel: Rs.58-75/kg\n- Cement: Rs.340-430/bag\n- Electrical rough: Rs.85-140/sqft\n- Labour: Rs.450-700/day\n\n'
     +'When user mentions an order or payment, parse it and output ONE <ENTRY> block:\n'
@@ -2609,59 +2775,20 @@ function autoAddBillVendorContact(result) {
   if (!result || (result.docType !== 'Bill' && result.docType !== 'Receipt')) return;
   var name = (result.vendorName || '').trim();
   if (!name || name.length < 2) return;
-  if (!state.contacts) state.contacts = [];
-
-  // Validate phone: 10 digits starting 6-9 only
-  var phone = '';
-  if (result.vendorPhone) {
-    var ph = String(result.vendorPhone).replace(/[^0-9]/g, '');
-    if (/^[6-9][0-9]{9}$/.test(ph)) phone = ph;
-  }
-
-  // Trim address to avoid garbage long strings from OCR
-  var address = (result.vendorAddress || '').trim().substring(0, 100);
-
-  var exists = state.contacts.find(function(c) {
-    return c.name.toLowerCase() === name.toLowerCase();
-  });
-
-  if (exists) {
-    // Update phone and/or address if we now have them and didn't before
-    var updated = false;
-    if (phone && !exists.phone) { exists.phone = phone; updated = true; }
-    if (address && !exists.address) { exists.address = address; updated = true; }
-    if (updated) {
-      saveData();
-      renderContacts();
-      // BUG FIX: push updated contact back to Sheet so phone/address persists
-      pushToSheet('Contacts',
-        ['id','name','phone','role','address','notes','addedDate'],
-        [exists.id, exists.name, exists.phone, exists.role, exists.address||'', exists.notes||'', exists.addedDate||today()]
-      );
-      toast(name + ' contact updated (phone/address added) ✓', 'ok');
-    }
-    return;
-  }
-
-  // New contact
-  var newContact = {
-    id: 'con_' + Date.now() + Math.random().toString(36).slice(2,5),
+  // Infer category from line items for contact intelligence
+  var cat = inferCategoryFromLineItems(result.lineItems);
+  var billAmt = Number(String(result.amount||'0').replace(/[^0-9]/g,'')) || 0;
+  upsertContact({
     name: name,
-    phone: phone,
-    role: 'vendor',
-    address: address,
+    phone: result.vendorPhone || '',
+    category: cat,
+    lastPrice: billAmt,
+    lastPriceUnit: 'bill',
+    lastPriceDate: result.documentDate || today(),
+    address: result.vendorAddress || '',
     notes: 'Bill vendor — ' + (result.summary || result.documentDate || '').substring(0, 80),
-    addedDate: today(),
     source: 'bill'
-  };
-  state.contacts.push(newContact);
-  saveData();
-  renderContacts();
-  pushToSheet('Contacts',
-    ['id','name','phone','role','address','notes','addedDate'],
-    [newContact.id, newContact.name, newContact.phone, newContact.role, newContact.address, newContact.notes, newContact.addedDate]
-  );
-  toast(name + ' Contacts లో add అయ్యారు' + (phone ? ' 📞' : '') + ' ✓', 'ok');
+  });
 }
 
 // Build HTML alert cards for bill price changes and mismatches
@@ -2860,7 +2987,7 @@ async function handlePhoto(e, source) {
       return;
     }
 
-    // ── SAVE DOCUMENT ──
+    // ── SAVE DOCUMENT (session only — not persisted to localStorage) ──
     var doc = {
       id: 'd'+Date.now(),
       date: docDate,
@@ -2870,24 +2997,51 @@ async function handlePhoto(e, source) {
       result: result
     };
     state.documents.push(doc);
-    saveData();
+    // Note: saveData() strips documents — they live in memory this session only
+    // On next app open, docs are rebuilt from BillHeaders + Documents sheet via sync
     renderDocList();
 
-    pushToSheet('Documents',
-      ['id','date','type','propertyType','summary','fileName'],
-      [doc.id, doc.date, doc.type, doc.propertyType, (result.summary||'').substring(0,200), file.name]
-    );
+    var isBillDoc = (result.docType === 'Bill' || result.docType === 'Receipt');
+
+    if (isBillDoc) {
+      // ── BILL: write to BillHeaders + BillItems sheets (permanent price database) ──
+      pushToSheet('BillHeaders',
+        ['docId','date','vendorName','vendorPhone','invoiceNumber','billTotal','gstAmount','summary','fileName'],
+        [doc.id, doc.date, result.vendorName||'', result.vendorPhone||'',
+         result.invoiceNumber||'', result.amount||'', result.gstAmount||'',
+         (result.summary||'').substring(0,200), file.name]
+      );
+      // One row per line item — this is the permanent price history database
+      if (result.lineItems && result.lineItems.length) {
+        result.lineItems.forEach(function(li) {
+          if (!li.itemKey && !li.itemName) return;
+          pushToSheet('BillItems',
+            ['docId','date','vendorName','itemName','itemKey','quantity','unit','unitRate','lineTotal','confidence'],
+            [doc.id, doc.date, result.vendorName||'',
+             li.itemName||'', li.itemKey||'',
+             li.quantity!=null?li.quantity:'', li.unit||'',
+             li.unitRate!=null?li.unitRate:'', li.lineTotal!=null?li.lineTotal:'',
+             li.confidence||80]
+          );
+        });
+      }
+    } else {
+      // ── REG/AGREEMENT: write to Documents sheet (property paper archive) ──
+      pushToSheet('Documents',
+        ['id','date','type','propertyType','summary','fileName'],
+        [doc.id, doc.date, doc.type, doc.propertyType, (result.summary||'').substring(0,200), file.name]
+      );
+    }
 
     // ── BILL INTELLIGENCE ──
-    var isBillDoc = (result.docType === 'Bill' || result.docType === 'Receipt');
     var billAlerts = [];
     if (isBillDoc) {
-      // 1. Save line items to price history + check for price changes / total mismatch
+      // 1. Save line items to in-memory price history + check for price changes / mismatch
       billAlerts = processBillLineItems(result, doc.id);
-      // 2. Auto-add vendor to contacts (with phone if available)
+      // 2. Upsert vendor to contacts with price intelligence
       autoAddBillVendorContact(result);
     } else {
-      // Non-bill: auto-add buyer/seller to contacts
+      // Non-bill: upsert buyer/seller to contacts
       autoAddContactFromDoc(result);
     }
 
@@ -3990,84 +4144,58 @@ function extractPhones(text) {
 
 function autoAddContactFromDoc(result) {
   if (!result) return;
-  if (!state.contacts) state.contacts = [];
-
   var contacts = [];
 
-  // Method 1: Extract from ownershipChain
+  // Extract from ownershipChain
   if (result.ownershipChain && result.ownershipChain.length) {
     result.ownershipChain.forEach(function(step) {
       if (step.buyer && step.buyer.length > 2) {
         var bname = step.buyer.replace(/\(.*?\)/g,'').trim().substring(0,60);
         if (bname && bname !== '—') {
           var bphone = step.buyerPhone ? String(step.buyerPhone) : (extractPhones(step.buyer)[0]||'');
-          contacts.push({name:bname, phone:bphone, role:'Buyer', aadhaar:step.buyerAadhaar||''});
+          contacts.push({name:bname, phone:bphone});
         }
       }
       if (step.seller && step.seller.length > 2) {
         var sname = step.seller.replace(/\(.*?\)/g,'').trim().substring(0,60);
         if (sname && sname !== '—') {
           var sphone = step.sellerPhone ? String(step.sellerPhone) : (extractPhones(step.seller)[0]||'');
-          contacts.push({name:sname, phone:sphone, role:'Seller', aadhaar:step.sellerAadhaar||''});
+          contacts.push({name:sname, phone:sphone});
         }
       }
     });
   }
 
-  // Method 2: Extract from direct fields (sellerName, buyerName etc)
+  // Extract from direct fields
   var fields = {};
   (result.fields||[]).forEach(function(f){
     var k = (f.key||'').toLowerCase().replace(/\s+/g,'');
     var v = typeof f.value==='object' ? (f.value&&f.value.value||'') : String(f.value||'');
     fields[k] = v.trim();
   });
-
-  // Add buyer from direct fields if not already in ownershipChain
   if (fields['buyerfullname'] || fields['buyername']) {
     var bn = fields['buyerfullname'] || fields['buyername'];
     var bp = fields['buyerphone'] ? String(fields['buyerphone']) : '';
-    if (bn && bn.length > 2 && !contacts.find(function(c){ return c.name === bn; })) {
-      contacts.push({name:bn, phone:bp, role:'Buyer', aadhaar:fields['buyeraadhaar']||''});
-    }
+    if (bn && bn.length > 2 && !contacts.find(function(c){ return c.name === bn; }))
+      contacts.push({name:bn, phone:bp});
   }
   if (fields['sellerfullname'] || fields['sellername']) {
     var sn = fields['sellerfullname'] || fields['sellername'];
     var sp = fields['sellerphone'] ? String(fields['sellerphone']) : '';
-    if (sn && sn.length > 2 && !contacts.find(function(c){ return c.name === sn; })) {
-      contacts.push({name:sn, phone:sp, role:'Seller', aadhaar:fields['selleraadhaar']||''});
-    }
+    if (sn && sn.length > 2 && !contacts.find(function(c){ return c.name === sn; }))
+      contacts.push({name:sn, phone:sp});
   }
 
-  // Save each contact
   contacts.forEach(function(c) {
     if (!c.name || c.name.length < 2) return;
-    var exists = state.contacts.find(function(x){
-      return x.name.toLowerCase() === c.name.toLowerCase();
+    upsertContact({
+      name: c.name,
+      phone: c.phone || '',
+      category: '',
+      notes: 'From ' + (result.docType||'document') + ' — ' + (result.summary||'').substring(0,60),
+      source: 'document'
     });
-    if (!exists) {
-      var newContact = {
-        id: 'c' + Date.now() + Math.random().toString(36).slice(2,6),
-        name: c.name,
-        phone: c.phone || '',
-        role: c.role || 'Other',
-        aadhaar: c.aadhaar || '',
-        address: '',
-        notes: '',
-        addedDate: today(),
-        source: 'document'
-      };
-      state.contacts.push(newContact);
-      pushToSheet('Contacts',
-        ['id','name','phone','role','address','notes','addedDate'],
-        [newContact.id, newContact.name, newContact.phone, newContact.role, newContact.aadhaar, '', newContact.addedDate]
-      );
-    }
   });
-
-  if (contacts.length > 0) {
-    saveData();
-    renderContacts();
-  }
 }
 
 
@@ -4081,30 +4209,53 @@ function filterContacts(f) {
   renderContacts();
 }
 
+// AI chat chip: ask AI about cheapest vendor for a category
+function askCheapest(category) {
+  showSc('chat');
+  var inp = document.getElementById('chat-in');
+  inp.value = category + ' కి చౌకగా ఎవరు ఇస్తారు? last price, date, phone చెప్పు';
+  sendMsg();
+}
+
 function renderContacts() {
   var el = document.getElementById('contact-list');
   if (!el) return;
   var all = state.contacts||[];
-  var filtered = contactFilter==='all' ? all : all.filter(function(c){ return c.role===contactFilter; });
+  var filtered = contactFilter==='all' ? all : all.filter(function(c){ return c.category===contactFilter; });
   if (!filtered.length) {
-    el.innerHTML = '<div class="empty"><div class="ei">👥</div><div class="et">Contacts లేవు</div><div class="es">Documents scan చేస్తే auto-add అవుతారు</div></div>';
+    el.innerHTML = '<div class="empty"><div class="ei">👥</div><div class="et">Contacts లేవు</div><div class="es">Bills/Docs scan చేయండి లేదా AI Chat లో vendor పేరు చెప్పండి</div></div>';
     return;
   }
-  var roleIco = {buyer:'🟢',seller:'🟡',vendor:'🔵',other:'⚪'};
-  var roleLbl = {buyer:'Buyer',seller:'Seller',vendor:'Vendor',other:'Other'};
+  var catEmoji = {Sand:'🪨',Steel:'🔩',Cement:'🏗️',Electrical:'⚡',Labour:'👷',Hardware:'🔧',Other:'📦'};
   el.innerHTML = filtered.map(function(c){
+    var ico = catEmoji[c.category] || '👤';
+    var lastPriceHtml = '';
+    if (c.lastPrice && Number(c.lastPrice) > 0) {
+      lastPriceHtml = '<div style="display:flex;align-items:center;gap:6px;margin-top:6px;'
+        +'background:rgba(232,184,74,0.08);border:1px solid rgba(232,184,74,0.2);'
+        +'border-radius:7px;padding:5px 9px">'
+        +'<span style="font-size:11px;color:var(--tx3)">Last price:</span>'
+        +'<span style="font-size:13px;font-weight:700;font-family:JetBrains Mono;color:var(--amb)">₹'+fmtIN(Number(c.lastPrice))+'</span>'
+        +(c.lastPriceUnit?'<span style="font-size:11px;color:var(--tx3)">/'+escH(c.lastPriceUnit)+'</span>':'')
+        +(c.lastPriceDate?'<span style="font-size:10px;color:var(--tx3);margin-left:auto">'+escH(c.lastPriceDate)+'</span>':'')
+        +'</div>';
+    }
+    var totalHtml = '';
+    if (c.totalBusiness && Number(c.totalBusiness) > 0) {
+      totalHtml = '<div style="font-size:11px;color:var(--tx3);margin-top:3px">Total business: <span style="color:var(--teal);font-weight:600">₹'+fmtIN(Number(c.totalBusiness))+'</span></div>';
+    }
     return '<div class="contact-card fu">'
-      +'<div class="cc-av">'+(roleIco[c.role]||'👤')+'</div>'
+      +'<div class="cc-av">'+ico+'</div>'
       +'<div class="cc-body">'
         +'<div class="cc-name">'+escH(c.name)+'</div>'
-        +'<span class="cc-role '+c.role+'">'+roleLbl[c.role]+'</span>'
-        +(c.phone?'<div class="cc-detail">📞 '+escH(c.phone)+'</div>':'')
-        +(c.address?'<div class="cc-detail">📍 '+escH(c.address)+'</div>':'')
-        +(c.notes?'<div class="cc-detail" style="color:var(--tx3)">📝 '+escH(c.notes)+'</div>':'')
-        +(c.phone?'<div style="display:flex;align-items:center;gap:6px;margin-top:5px">'
-          +'<span style="font-size:14px">📞</span>'
-          +'<span style="font-size:13px;font-family:JetBrains Mono;font-weight:600;color:var(--teal)">'+c.phone+'</span>'
-          +'</div>':'')
+        +(c.category?'<span class="cc-role vendor" style="font-size:10px">'+escH(c.category)+'</span>':'')
+        +(c.phone
+          ?'<div style="display:flex;align-items:center;gap:6px;margin-top:4px">'
+            +'<span style="font-size:13px;font-family:JetBrains Mono;font-weight:600;color:var(--teal)">'+escH(c.phone)+'</span>'
+            +'</div>':'')
+        +(c.address?'<div class="cc-detail" style="margin-top:3px">📍 '+escH(c.address)+'</div>':'')
+        +lastPriceHtml
+        +totalHtml
         +'<div class="cc-actions">'
           +(c.phone?'<a href="tel:'+c.phone+'" class="btn ghost sm" style="font-size:12px;text-decoration:none;color:var(--teal);border-color:rgba(58,232,200,0.3)">📞 Call</a>':'')
           +(c.phone?'<a href="https://wa.me/91'+String(c.phone).replace(/[^0-9]/g,'')+'" target="_blank" class="btn ghost sm" style="font-size:12px;text-decoration:none;color:#25D366;border-color:rgba(37,211,102,0.4)">💬 WhatsApp</a>':'')
@@ -4614,16 +4765,39 @@ function buildDataSummary() {
   var payments = entries.filter(function(e){ return e.type === 'payment'; })
     .map(function(e){ return {date:e.date, vendor:e.vendor, amount:Number(e.amount)||0}; });
 
-  // Vendor summary with balance
+  // Contacts lookup map — name (lowercase) → phone/address for cross-reference
+  var contactsMap = {};
+  (state.contacts || []).forEach(function(c) {
+    if (c.name) contactsMap[c.name.toLowerCase()] = c;
+  });
+
+  // Vendor summary with balance — enrich with contact phone if vendor.phone is missing
   var vendorSummary = vendors.map(function(v){
+    var phone = v.phone || '';
+    if (!phone) {
+      // Fallback: look up in contacts by name
+      var match = contactsMap[v.name ? v.name.toLowerCase() : ''];
+      if (match && match.phone) phone = match.phone;
+    }
     return {
       name: v.name,
       category: v.category,
-      phone: v.phone,
+      phone: phone,
       totalOrdered: Number(v.totalOrdered)||0,
       totalPaid: Number(v.totalPaid)||0,
       balance: (Number(v.totalOrdered)||0) - (Number(v.totalPaid)||0),
       lastDate: v.lastDate
+    };
+  });
+
+  // Contacts list — full, for AI to answer phone/address queries
+  var contactsList = (state.contacts || []).map(function(c) {
+    return {
+      name: c.name,
+      phone: c.phone || '',
+      role: c.role || '',
+      address: c.address || '',
+      notes: (c.notes || '').substring(0, 80)
     };
   });
 
@@ -4636,26 +4810,33 @@ function buildDataSummary() {
     }
   });
 
-  // Bill item price history — last 5 records per item key, across all vendors
+  // Bill item price history — from BillItems sheet (permanent, survives data wipes)
+  // Last 20 per item key — enough for trend analysis without token overflow
   var billPriceInsights = {};
   Object.keys(state.billPriceHistory || {}).forEach(function(key) {
     var history = state.billPriceHistory[key];
     if (history && history.length > 0) {
-      // Get last 5 entries, include vendor + rate + date
-      billPriceInsights[key] = history.slice(-5).map(function(h) {
-        return {date: h.date, vendor: h.vendor, rate: h.unitRate, unit: h.unit, total: h.lineTotal, qty: h.quantity};
+      // Sort by date ascending so AI sees chronological trend
+      var sorted = history.slice().sort(function(a,b){
+        var da = (a.date||'').split('.').reverse().join('');
+        var db = (b.date||'').split('.').reverse().join('');
+        return da.localeCompare(db);
+      });
+      billPriceInsights[key] = sorted.slice(-20).map(function(h) {
+        return {date:h.date, vendor:h.vendor, rate:h.unitRate, unit:h.unit, total:h.lineTotal, qty:h.quantity};
       });
     }
   });
 
-  // Bills summary from documents
+  // Bills summary from documents (session memory + restored from BillHeaders on sync)
   var bills = (state.documents || []).filter(function(d) {
     return d.result && (d.result.docType === 'Bill' || d.result.docType === 'Receipt');
-  }).slice(-20).map(function(d) {
+  }).slice(-30).map(function(d) {
     var r = d.result;
     return {
       date: d.date,
       vendor: r.vendorName || '',
+      vendorPhone: r.vendorPhone || '',
       amount: r.amount || '',
       summary: r.summary || '',
       itemCount: (r.lineItems || []).length
@@ -4673,11 +4854,13 @@ function buildDataSummary() {
       totalPaid: totalPaid,
       totalPending: totalOrdered - totalPaid,
       vendorCount: vendors.length,
+      contactCount: contactsList.length,
       billCount: bills.length
     },
     expenses: expenses.slice(-50),
     payments: payments.slice(-30),
     vendors: vendorSummary,
+    contacts: contactsList,
     priceHistory: priceInsights,
     billPriceHistory: billPriceInsights,
     recentBills: bills
