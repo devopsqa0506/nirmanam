@@ -1407,95 +1407,6 @@ body{background:var(--bg);color:var(--tx);font-family:'Noto Sans Telugu',sans-se
 </div>
 
 <script>
-// ════════════════════════════════════════════════════════
-// APPS SCRIPT CODE
-// ════════════════════════════════════════════════════════
-var APPS_SCRIPT_CODE = [
-  'function doPost(e) {',
-  '  try {',
-  '    var data = JSON.parse(e.postData.contents);',
-  '    var ss = SpreadsheetApp.openById(data.sheetId);',
-  '    var action = data.action;',
-  '',
-  '    if (action === "append") {',
-  '      var sheet = ss.getSheetByName(data.sheetName) || ss.insertSheet(data.sheetName);',
-  '      if (sheet.getLastRow() === 0) sheet.appendRow(data.headers);',
-  '      sheet.appendRow(data.row);',
-  '      return ok({});',
-  '    }',
-  '',
-  '    if (action === "readAll") {',
-  '      var result = {};',
-  '      ["Entries","Vendors","Prices","Documents","Contacts","Projects"].forEach(function(name) {',
-  '        var sh = ss.getSheetByName(name);',
-  '        result[name] = (sh && sh.getLastRow() > 1) ? sh.getDataRange().getValues() : [];',
-  '      });',
-  '      return ok({data: result});',
-  '    }',
-  '',
-  '    if (action === "saveFile") {',
-  '      var root = getOrCreateFolder("SiteBook Docs", DriveApp.getRootFolder());',
-  '      var folder;',
-  '      if (data.fileType === "Registration" || data.fileType === "Agreement") {',
-  '        var props = getOrCreateFolder("Properties", root);',
-  '        folder = getOrCreateFolder(sanitize(data.propertyFolder || "Unknown"), props);',
-  '      } else if (data.fileType === "Bill") {',
-  '        var bills = getOrCreateFolder("Bills", root);',
-  '        folder = getOrCreateFolder(data.monthFolder || getYearMonth(), bills);',
-  '      } else {',
-  '        folder = getOrCreateFolder("Other", root);',
-  '      }',
-  '      var bytes = Utilities.base64Decode(data.fileBase64);',
-  '      var blob = Utilities.newBlob(bytes, data.mimeType, data.fileName);',
-  '      var file = folder.createFile(blob);',
-  '      file.setDescription(data.description || "");',
-  '      Logger.log("Saved: " + file.getName() + " in " + folder.getName());',
-  '      return ok({fileId: file.getId(), fileUrl: file.getUrl()});',
-  '    }',
-  '',
-  '    if (action === "ping") { return ok({}); }',
-  '',
-  '  } catch(err) {',
-  '    Logger.log("Error: " + err.toString());',
-  '    return ContentService.createTextOutput(JSON.stringify({ok:false,error:err.toString()}))',
-  '      .setMimeType(ContentService.MimeType.JSON);',
-  '  }',
-  '}',
-  '',
-  'function ok(extra) {',
-  '  var obj = {ok:true};',
-  '  for (var k in extra) obj[k] = extra[k];',
-  '  return ContentService.createTextOutput(JSON.stringify(obj))',
-  '    .setMimeType(ContentService.MimeType.JSON);',
-  '}',
-  '',
-  'function getOrCreateFolder(name, parent) {',
-  '  var iter = parent.getFoldersByName(name);',
-  '  return iter.hasNext() ? iter.next() : parent.createFolder(name);',
-  '}',
-  '',
-  'function sanitize(name) {',
-  '  return name.replace(/[^a-zA-Z0-9_\\-\\.\\s]/g,"").trim().substring(0,50);',
-  '}',
-  '',
-  'function getYearMonth() {',
-  '  var d = new Date();',
-  '  return d.getFullYear()+"-"+("0"+(d.getMonth()+1)).slice(-2);',
-  '}',
-  '',
-  'function doGet(e) {',
-  '  return ContentService.createTextOutput(JSON.stringify({ok:true,msg:"SiteBook API v5"}))',
-  '    .setMimeType(ContentService.MimeType.JSON);',
-  '}',
-  '',
-  'function testDrive() {',
-  '  var root = getOrCreateFolder("SiteBook Docs", DriveApp.getRootFolder());',
-  '  var folder = getOrCreateFolder("Test", root);',
-  '  var blob = Utilities.newBlob("SiteBook Test!", "text/plain", "test.txt");',
-  '  var file = folder.createFile(blob);',
-  '  Logger.log("Test file: " + file.getUrl());',
-  '}'
-].join('\n');
 
 // ════════════════════════════════════════════════════════
 // APPS SCRIPT CODE
@@ -1518,7 +1429,7 @@ var APPS_SCRIPT_CODE = [
   '    // ── READ ALL SHEETS ──',
   '    if (action === "readAll") {',
   '      var result = {};',
-  '      ["Entries","Vendors","Prices","Documents","Contacts","Projects"].forEach(function(name) {',
+  '      ["Entries","Vendors","Prices","Documents","Contacts","Projects","BillHeaders","BillItems"].forEach(function(name) {',
   '        var sh = ss.getSheetByName(name);',
   '        result[name] = (sh && sh.getLastRow() > 1) ? sh.getDataRange().getValues() : [];',
   '      });',
@@ -4160,29 +4071,46 @@ var contactFilter = 'all';
 function saveContact() {
   var name = document.getElementById('con-name').value.trim();
   if (!name) { toast('Name enter చేయండి', 'err'); return; }
+  var roleVal = document.getElementById('con-role').value;
+  // Map role → category so the rest of the app (renderContacts, upsertContact) works uniformly
+  var categoryVal = roleVal === 'vendor' ? 'Other' : (roleVal || 'Other');
   var contact = {
-    id: 'con_' + Date.now(),
+    id: 'con_' + Date.now() + Math.random().toString(36).slice(2,5),
     name: name,
     phone: document.getElementById('con-phone').value.trim(),
-    role: document.getElementById('con-role').value,
+    role: roleVal,
+    category: categoryVal,
     address: document.getElementById('con-addr').value.trim(),
     notes: document.getElementById('con-notes').value.trim(),
-    addedDate: today()
+    lastPrice: '',
+    lastPriceUnit: '',
+    lastPriceDate: '',
+    totalBusiness: 0,
+    addedDate: today(),
+    source: 'manual'
   };
+  // Validate phone
+  if (contact.phone) {
+    var ph = contact.phone.replace(/[^0-9]/g,'');
+    contact.phone = /^[6-9][0-9]{9}$/.test(ph) ? ph : '';
+  }
   if (!state.contacts) state.contacts = [];
   // Avoid duplicate by name+phone
-  var exists = state.contacts.find(function(c){ return c.name===name && c.phone===contact.phone; });
+  var exists = state.contacts.find(function(c){ return c.name.toLowerCase()===name.toLowerCase() && (contact.phone ? c.phone===contact.phone : false); });
+  if (!exists) exists = state.contacts.find(function(c){ return c.name.toLowerCase()===name.toLowerCase(); });
   if (exists) { toast('Contact already exists', 'info'); closeModal('add-contact'); return; }
   state.contacts.push(contact);
   saveData(); renderContacts();
   closeModal('add-contact');
-  // Push to Google Sheet
+  // Push to Google Sheet — use unified schema matching upsertContact
   pushToSheet('Contacts',
-    ['id','name','phone','role','address','notes','addedDate'],
-    [contact.id, contact.name, contact.phone, contact.role, contact.address, contact.notes, contact.addedDate]
+    ['id','name','phone','category','lastPrice','lastPriceUnit','lastPriceDate','totalBusiness','address','notes','addedDate'],
+    [contact.id, contact.name, contact.phone, contact.category,
+     contact.lastPrice, contact.lastPriceUnit, contact.lastPriceDate,
+     contact.totalBusiness, contact.address, contact.notes, contact.addedDate]
   );
   ['con-name','con-phone','con-addr','con-notes'].forEach(function(id){ document.getElementById(id).value=''; });
-  toast('Contact saved!', 'ok');
+  toast('Contact saved! ✓', 'ok');
 }
 
 function extractPhones(text) {
