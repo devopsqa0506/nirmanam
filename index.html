@@ -1012,7 +1012,6 @@ body{background:var(--bg);color:var(--tx);font-family:'Noto Sans Telugu',sans-se
           </div>
           <div style="display:flex;gap:6px">
             <button class="btn ghost sm" style="color:var(--teal);border-color:rgba(58,232,200,0.3)" onclick="getDriveUrl()">Open ↗</button>
-            <button class="btn ghost sm" style="color:var(--amb);border-color:rgba(232,184,74,0.3);font-size:11px" onclick="testDriveUpload()">Test</button>
           </div>
         </div>
         <div class="si"><div class="si-ico">📱</div><div class="si-body"><div class="si-t">New Phone Setup</div><div class="si-s">Same Sheet ID + Gemini Key enter చేయండి</div></div><button class="btn ghost sm" onclick="showGuide()">Guide</button></div>
@@ -1820,6 +1819,7 @@ function launchApp() {
 // GOOGLE SHEETS SYNC
 // ════════════════════════════════════════════════════════
 var isSyncing = false;
+var _pendingEntries = {}; // keyed by unique id for confirm cards
 
 function setSyncStatus(s) {
   var dot = document.getElementById('sync-dot');
@@ -1938,9 +1938,54 @@ function mergeSheetData(sheetData) {
     });
   }
 
-  // ── Documents are session-only — not restored from sheet ──
-  // Docs page only shows what was scanned in the current session.
-  // Sheet (BillHeaders, Documents) is used for price history and reporting only.
+  // ── Rebuild documents list from BillHeaders + Documents sheet ──
+  // Documents are session-only in localStorage but restored from sheet on sync
+  state.documents = [];
+
+  if (sheetData.BillHeaders && sheetData.BillHeaders.length > 1) {
+    var bhHdrs = sheetData.BillHeaders[0];
+    var bhRows = sheetData.BillHeaders.slice(1);
+    bhRows.forEach(function(r){
+      var obj = {};
+      bhHdrs.forEach(function(h,i){ obj[h]=r[i]; });
+      if (!obj.docId) return;
+      state.documents.push({
+        id: obj.docId,
+        date: obj.date||'',
+        fileName: obj.fileName||'',
+        type: 'Bill',
+        propertyType: '',
+        result: {
+          docType: 'Bill',
+          vendorName: obj.vendorName||'',
+          vendorPhone: obj.vendorPhone||'',
+          invoiceNumber: obj.invoiceNumber||'',
+          amount: obj.billTotal||'',
+          gstAmount: obj.gstAmount||'',
+          summary: obj.summary||'',
+          lineItems: [] // line items available in billPriceHistory by docId if needed
+        }
+      });
+    });
+  }
+
+  if (sheetData.Documents && sheetData.Documents.length > 1) {
+    var dHdrs = sheetData.Documents[0];
+    var dRows = sheetData.Documents.slice(1);
+    dRows.forEach(function(r){
+      var obj = {};
+      dHdrs.forEach(function(h,i){ obj[h]=r[i]; });
+      if (!obj.id) return;
+      state.documents.push({
+        id: obj.id,
+        date: obj.date||'',
+        fileName: obj.fileName||'',
+        type: obj.type||'Document',
+        propertyType: obj.propertyType||'',
+        result: { docType: obj.type||'Document', summary: obj.summary||'' }
+      });
+    });
+  }
 
   renderDocList();
   refreshUI();
@@ -2317,6 +2362,10 @@ function renderDocList() {
           +'</div>'
           +'<span class="dc-badge '+badge+'">'+(r.docType||'Doc')+'</span>'
         +'</div>'
+          +'<div><div class="dc-name">'+escH(r.docType||'Document')+(r.transactionType?' · '+r.transactionType:'')+'</div>'
+          +'<div class="dc-date">📅 '+doc.date+(r.propertyType?' · 🏘️ '+r.propertyType:'')+'</div></div>'
+          +'<span class="dc-badge '+badge+'">'+(r.docType||'Doc')+'</span>'
+        +'</div>'
         +finHtml+chainHtml+fieldsHtml+alertsHtml+confWarn
         +buildEcButton(r)
         +'<div style="padding:9px 13px;border-top:1px solid var(--bd)">'
@@ -2464,8 +2513,11 @@ function sendMsg() {
   callGemini(null, null, null).finally(function(){ sbtn.disabled=false; });
 }
 
-function confirmEntry(entry, btn) {
+function confirmEntry(eid, btn) {
+  var entry = _pendingEntries[eid];
+  if (!entry) { btn.closest('.cacts').innerHTML = '<span class="bad">⚠️ Already saved or expired</span>'; return; }
   addEntry(entry);
+  delete _pendingEntries[eid];
   btn.closest('.cacts').innerHTML = '<span class="ok">✓ Google Sheet లో Saved!</span>';
 }
 
@@ -2545,6 +2597,8 @@ async function callGemini(imageData, imageMime, docPromptOverride) {
 
     var html = display;
     parsedEntries.forEach(function(entry){
+      var eid = 'e_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
+      _pendingEntries[eid] = entry;
       var bal = entry.type==='order' ? getBalance(entry.vendor)+Number(entry.amount) : getBalance(entry.vendor)-Number(entry.amount);
       html += '<div class="ccard">'
         +'<div class="ccard-t">'+(entry.type==='payment'?'💰 Payment':'📦 Order')+' — Confirm?</div>'
@@ -2556,7 +2610,7 @@ async function callGemini(imageData, imageMime, docPromptOverride) {
         +'<div class="crow"><span class="ck">Balance after</span><span class="cv '+(bal>0?'bad':bal<0?'ok':'')+'">'
           +rup(Math.abs(bal))+' '+(bal>0?'మీరు ఇవ్వాలి':bal<0?'advance':'Settled ✓')+'</span></div>'
         +'<div class="cacts">'
-          +'<button class="btn amb sm" style="flex:1" onclick="confirmEntry('+JSON.stringify(entry).replace(/"/g,"'").replace(/'/g,"&#39;")+',this)">✓ Save to Sheet</button>'
+          +'<button class="btn amb sm" style="flex:1" onclick="confirmEntry(\''+eid+'\',this)">✓ Save to Sheet</button>'
           +'<button class="btn ghost sm" onclick="this.closest(\'.ccard\').remove()">✗</button>'
         +'</div>'
       +'</div>';
@@ -4307,15 +4361,8 @@ function saveToDrive(b64, mimeType, fileName, docType, result, docRef) {
 
   } else if (docType === 'Bill' || docType === 'Other') {
     fileType = 'Bill';
-    // Use transaction date from document (DD.MM.YYYY) — fall back to current month only if missing
-    var txnDate = (r.documentDate || '').trim();
-    var txnParts = txnDate.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
-    if (txnParts) {
-      monthFolder = txnParts[3] + '-' + ('0'+txnParts[2]).slice(-2); // YYYY-MM from bill date
-    } else {
-      var d = new Date();
-      monthFolder = d.getFullYear() + '-' + ('0'+(d.getMonth()+1)).slice(-2);
-    }
+    var d = new Date();
+    monthFolder = d.getFullYear() + '-' + ('0'+(d.getMonth()+1)).slice(-2);
 
   } else {
     fileType = 'Other';
@@ -4366,35 +4413,6 @@ function getDriveUrl() {
   toast('Google Drive open అయింది — "SiteBook Docs" folder కనపడుతుంది', 'info');
 }
 
-function testDriveUpload() {
-  if (!cfg.scriptUrl || !cfg.sheetId) { toast('Setup complete చేయండి first', 'err'); return; }
-  showProc('Testing Drive upload...');
-  var testB64 = btoa('SiteBook Drive Test - ' + new Date().toISOString());
-  var payload = JSON.stringify({
-    action: 'saveFile',
-    sheetId: cfg.sheetId,
-    fileBase64: testB64,
-    mimeType: 'text/plain',
-    fileName: 'SiteBook_Test_' + Date.now() + '.txt',
-    fileType: 'Other',
-    propertyFolder: '',
-    monthFolder: '',
-    description: 'Test file from SiteBook app'
-  });
-  // Must use no-cors — Apps Script doesn't send CORS headers for browser requests
-  fetch(cfg.scriptUrl, { method: 'POST', mode: 'no-cors', body: payload })
-  .then(function(){
-    hideProc();
-    toast('📁 Test file sent to Drive! 30 seconds wait చేసి Drive check చేయండి', 'ok');
-    setTimeout(function(){
-      window.open('https://drive.google.com/drive/search?q=SiteBook_Test', '_blank');
-    }, 2000);
-  })
-  .catch(function(err){
-    hideProc();
-    toast('Failed: ' + err.message, 'err');
-  });
-}
 
 // ════════════════════════════════════════════════════════
 // QR CODE — GENERATE & SCAN
