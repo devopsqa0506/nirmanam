@@ -753,6 +753,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Noto Sans Telugu',sans-se
     <!-- CHAT -->
     <div class="sc" id="sc-chat">
       <div class="chat-wrap">
+        <div style="display:flex;justify-content:flex-end;padding:6px 12px 0"><button onclick="clearChat()" style="background:none;border:none;color:var(--tx3);font-size:11px;cursor:pointer;padding:2px 6px">🗑️ Clear Chat</button></div>
         <div class="chat-msgs" id="chat-msgs"></div>
         <div class="cin-area">
           <div class="chips" id="chat-chips">
@@ -766,7 +767,6 @@ body{background:var(--bg);color:var(--tx);font-family:'Noto Sans Telugu',sans-se
             <div class="chip" onclick="doSend('అందరికీ ఎంత బకాయి చెప్పు')">📊 Summary</div>
             <div class="chip" style="border-color:rgba(90,175,232,0.4);color:var(--sky)" onclick="doSend('uploaded document లో survey number correct గా ఉందా? recheck చేయి')">🔍 Recheck Doc</div>
             <div class="chip" style="border-color:rgba(90,175,232,0.4);color:var(--sky)" onclick="doSend('document లో financial amounts అన్నీ correct గా ఉన్నాయా? verify చేయి')">💰 Verify Amounts</div>
-            <div class="chip" style="border-color:rgba(90,175,232,0.4);color:var(--sky)" onclick="doSend('ownership chain లో అన్ని transactions కనిపిస్తున్నాయా? check చేయి')">🔗 Check Chain</div>
           </div>
           <div class="cin-row">
             <div class="cin-acts">
@@ -1918,6 +1918,14 @@ function mergeSheetData(sheetData) {
 }
 
 function syncNow() { toast('Syncing...','info'); syncFromSheet(); }
+
+function clearChat() {
+  if (!confirm('Chat history clear చేయాలా?')) return;
+  state.chatHistory = [];
+  saveData();
+  document.getElementById('chat-msgs').innerHTML = '';
+  toast('Chat cleared ✓', 'ok');
+}
 
 // ════════════════════════════════════════════════════════
 // DATA — add entry
@@ -3946,8 +3954,17 @@ function toggleProjDetail(el) {
 function deleteProjByIndex(el) {
   var idx = Number(el.dataset.proj);
   if (!confirm('Delete this project?')) return;
+  var proj = state.projects[idx];
+  var projId = proj ? proj.id : null;
   state.projects.splice(idx, 1);
   saveData(); renderProjects(); toast('Project deleted', 'ok');
+  // Delete from sheet so it doesnt come back on sync
+  if (projId && cfg.scriptUrl && cfg.sheetId) {
+    fetch(cfg.scriptUrl, {
+      method:'POST', mode:'no-cors',
+      body: JSON.stringify({action:'deleteRow', sheetId:cfg.sheetId, sheetName:'Projects', matchCol:'id', matchVal:projId})
+    });
+  }
 }
 
 function openHouseByIndex(el) {
