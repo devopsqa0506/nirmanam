@@ -1237,10 +1237,22 @@ body{background:var(--bg);color:var(--tx);font-family:'Noto Sans Telugu',sans-se
       </div>
     </div>
     <div style="background:var(--s2);border:1px solid var(--bd);border-radius:9px;padding:10px 14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
-      <span style="font-size:12px;color:var(--tx2)">Total Land Cost</span>
+      <span style="font-size:12px;color:var(--tx2)">Total Land Deal Value</span>
       <span id="p-landtotal-display" style="font-family:JetBrains Mono;font-weight:700;color:var(--amb);font-size:15px">₹0</span>
     </div>
     <input type="hidden" id="p-landcost">
+    <!-- Land Payment Schedule -->
+    <div id="p-land-payments-section">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <label class="fl" style="margin-bottom:0">💰 Land Payments</label>
+        <button type="button" onclick="addLandPaymentRow()" style="background:rgba(232,184,74,0.12);border:1px solid rgba(232,184,74,0.3);border-radius:7px;color:var(--amb);font-size:12px;padding:4px 10px;cursor:pointer">+ Add Payment</button>
+      </div>
+      <div id="p-land-payment-rows" style="margin-bottom:10px"></div>
+      <div style="background:var(--s3);border-radius:8px;padding:8px 12px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:12px;color:var(--tx2)">Total Paid So Far</span>
+        <span id="p-landpaid-display" style="font-family:JetBrains Mono;font-weight:700;color:var(--teal);font-size:14px">₹0</span>
+      </div>
+    </div>
     <!-- House Construction fields -->
     <div id="p-house-fields">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -4157,12 +4169,48 @@ function setProjType(type) {
   document.getElementById('p-modal-title').textContent = type === 'house' ? '🏗️ New House Project' : '🌾 New Land Sale Project';
 }
 
+// Temp land payment rows in the project modal (before save)
+var _pendingLandPmts = []; // [{id,date,amount,notes}]
+
 function calcLandTotal() {
   var cents = Number(document.getElementById('p-cents').value) || 0;
   var ppc   = Number(document.getElementById('p-price-per-cent').value) || 0;
   var total = cents * ppc;
   document.getElementById('p-landtotal-display').textContent = '₹' + fmtIN(total);
   document.getElementById('p-landcost').value = total;
+}
+
+function addLandPaymentRow(existingPmt) {
+  var row = existingPmt || { id:'plp_'+Date.now()+'_'+Math.random().toString(36).slice(2,6), date:new Date().toISOString().slice(0,10), amount:'', notes:'' };
+  if (!existingPmt) _pendingLandPmts.push(row);
+  renderLandPaymentRows();
+}
+
+function renderLandPaymentRows() {
+  var container = document.getElementById('p-land-payment-rows');
+  if (!container) return;
+  var html = '';
+  _pendingLandPmts.forEach(function(row, i) {
+    html += '<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px" data-lp-idx="'+i+'">'
+      +'<input class="fi fi-mono" type="date" value="'+row.date+'" oninput="_pendingLandPmts['+i+'].date=this.value;updateLandPaidTotal()" style="flex:0 0 130px;margin-bottom:0;font-size:13px">'
+      +'<input class="fi fi-mono" type="number" placeholder="Amount ₹" value="'+(row.amount||'')+'" oninput="_pendingLandPmts['+i+'].amount=Number(this.value)||0;updateLandPaidTotal()" style="flex:1;margin-bottom:0;font-size:13px">'
+      +'<input class="fi" type="text" placeholder="Note" value="'+(row.notes||'')+'" oninput="_pendingLandPmts['+i+'].notes=this.value" style="flex:1;margin-bottom:0;font-size:13px">'
+      +'<button type="button" onclick="_pendingLandPmts.splice('+i+',1);renderLandPaymentRows();updateLandPaidTotal()" style="background:none;border:none;color:var(--rose);font-size:16px;cursor:pointer;padding:0 4px;flex-shrink:0">×</button>'
+    +'</div>';
+  });
+  container.innerHTML = html;
+  updateLandPaidTotal();
+}
+
+function updateLandPaidTotal() {
+  var total = _pendingLandPmts.reduce(function(s,p){ return s+(Number(p.amount)||0); }, 0);
+  var el = document.getElementById('p-landpaid-display');
+  if (el) el.textContent = '₹' + fmtIN(total);
+}
+
+function clearLandPaymentRows() {
+  _pendingLandPmts = [];
+  renderLandPaymentRows();
 }
 
 function calcLandSellTotal() {
@@ -4234,6 +4282,23 @@ function saveProject() {
     state.projects.push(proj);
   }
 
+  // Save land payment rows from modal into state.landPayments
+  if (!state.landPayments) state.landPayments = [];
+  if (editId) {
+    // Remove existing land payments for this project (they'll be re-added from _pendingLandPmts)
+    state.landPayments = state.landPayments.filter(function(p){ return p.projId !== editId; });
+  }
+  _pendingLandPmts.forEach(function(row) {
+    if (row.amount > 0 && row.date) {
+      var pmt = { id: row.id, projId: proj.id, date: row.date, amount: Number(row.amount)||0, notes: row.notes||'' };
+      state.landPayments.push(pmt);
+      pushToSheet('LandPayments',
+        ['id','projId','date','amount','notes'],
+        [pmt.id, pmt.projId, pmt.date, pmt.amount, pmt.notes]
+      );
+    }
+  });
+
   saveData(); renderProjects();
   closeModal('add-project');
   ['p-name','p-landcost','p-cents','p-price-per-cent','p-houses','p-location','p-saleprice',
@@ -4244,6 +4309,7 @@ function saveProject() {
   document.getElementById('p-modal-title').textContent = '🏗️ New Project';
   document.getElementById('p-landtotal-display').textContent = '₹0';
   document.getElementById('p-selltotal-display') && (document.getElementById('p-selltotal-display').textContent = '₹0');
+  clearLandPaymentRows();
   setProjType('house');
   toast(editId ? 'Project updated ✓' : 'Project saved!', 'ok');
   pushToSheet('Projects',
@@ -4276,6 +4342,11 @@ function openEditProject(projId) {
     document.getElementById('p-cents-sold').value = proj.centsSold || 0;
     document.getElementById('p-amount-received').value = proj.amountReceived || 0;
   }
+  // Load existing land payments into modal rows
+  _pendingLandPmts = (state.landPayments||[])
+    .filter(function(p){ return p.projId === proj.id; })
+    .map(function(p){ return { id:p.id, date:p.date, amount:p.amount, notes:p.notes||'' }; });
+  renderLandPaymentRows();
   openModal('add-project');
 }
 
@@ -4295,10 +4366,13 @@ function renderProjects() {
 
     if (isLand) {
       // ── Land Sale Card ──
-      var landCost     = Number(proj.landCost) || 0;
+      var totalLandDeal = Number(proj.landCost) || 0;
+      var landPaidSoFar = (state.landPayments||[]).filter(function(p){ return p.projId===proj.id; })
+                          .reduce(function(s,p){ return s+Number(p.amount||0); },0);
+      var landCost     = landPaidSoFar > 0 ? landPaidSoFar : totalLandDeal;
       var expectedSale = Number(proj.expectedSaleTotal) || (Number(proj.sellPerCent||0) * Number(proj.centsToSell||0));
       var received     = Number(proj.amountReceived) || 0;
-      var profit       = expectedSale - landCost;
+      var profit       = expectedSale - totalLandDeal;
       var realizedProfit = received - landCost;
       var profitColor  = profit>0?'var(--sage)':profit<0?'var(--rose)':'var(--amb)';
       var centsSold    = Number(proj.centsSold) || 0;
@@ -4316,8 +4390,8 @@ function renderProjects() {
         +'<div class="proj-body" id="pd'+pidx+'" style="display:none">'
           +'<div class="profit-summary">'
             +'<div class="ps-box"><div class="pl">Bought</div><div class="pv" style="color:var(--amb)">'+proj.totalCents+' cents</div></div>'
-            +'<div class="ps-box"><div class="pl">Buy Price/cent</div><div class="pv" style="color:var(--sky)">'+rup(proj.pricePerCent||0)+'</div></div>'
-            +'<div class="ps-box"><div class="pl">Total Cost</div><div class="pv" style="color:var(--rose)">'+rup(landCost)+'</div></div>'
+            +'<div class="ps-box"><div class="pl">Deal Value</div><div class="pv" style="color:var(--rose)">'+rup(totalLandDeal)+'</div></div>'
+            +'<div class="ps-box"><div class="pl">Paid So Far</div><div class="pv" style="color:'+(landPaidSoFar>0?'var(--teal)':'var(--tx3)')+'">'+rup(landPaidSoFar)+'</div></div>'
           +'</div>'
           +'<div class="profit-summary" style="padding-top:0">'
             +'<div class="ps-box"><div class="pl">Sell Price/cent</div><div class="pv" style="color:var(--teal)">'+rup(proj.sellPerCent||0)+'</div></div>'
@@ -5152,6 +5226,7 @@ function openModal(id) {
   if (id==='add-proj-expense') { var d=document.getElementById('pexp-date'); if(d&&!d.value) d.value=new Date().toISOString().slice(0,10); }
   if (id==='add-proj-income')  { var d2=document.getElementById('inc-date'); if(d2&&!d2.value) d2.value=new Date().toISOString().slice(0,10); }
   if (id==='add-loan') { var d3=document.getElementById('ln-date'); if(d3&&!d3.value) d3.value=new Date().toISOString().slice(0,10); }
+  if (id==='add-project' && !document.getElementById('p-edit-id').value) { clearLandPaymentRows(); }
   document.getElementById(id).classList.add('on');
 }
 function closeModal(id) { document.getElementById(id).classList.remove('on'); }
