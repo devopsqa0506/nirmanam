@@ -786,6 +786,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Noto Sans Telugu',sans-se
     <div class="ni on" onclick="showSc('home')"><div class="ico">🏠</div><div class="lbl">Home</div></div>
     <div class="ni" onclick="showSc('chat')"><div class="ico">💬</div><div class="lbl">AI Chat</div></div>
     <div class="ni" onclick="showSc('projects')"><div class="ico">🏗️</div><div class="lbl">Projects</div></div>
+    <div class="ni" onclick="showSc('expenditure')"><div class="ico">📊</div><div class="lbl">Expenditure</div></div>
     <div class="ni" onclick="showSc('brain')"><div class="ico">🧠</div><div class="lbl">AI Brain</div></div>
     <div class="ni" onclick="showSc('contacts')"><div class="ico">👥</div><div class="lbl">Contacts</div></div>
     <div class="ni" onclick="showSc('docs')"><div class="ico">📄</div><div class="lbl">Docs</div></div>
@@ -865,17 +866,21 @@ body{background:var(--bg);color:var(--tx);font-family:'Noto Sans Telugu',sans-se
         <div id="project-list">
           <div class="empty"><div class="ei">🏗️</div><div class="et">Projects లేవు</div><div class="es">New Project add చేయండి</div></div>
         </div>
-        <!-- Profitability Summary -->
-        <div class="seg-t" style="margin-top:14px">Overall Profitability</div>
-        <div id="overall-profit">
-          <div class="empty"><div class="ei">📊</div><div class="et">Projects add చేసిన తర్వాత profit summary కనపడుతుంది</div></div>
+      </div>
+    </div>
+
+    <!-- EXPENDITURE screen -->
+    <div class="sc" id="sc-expenditure">
+      <div class="seg">
+        <div class="seg-t">
+          <span>📊 Project Expenditure</span>
         </div>
-        <!-- Project Expenditure -->
-        <div class="seg-t" style="margin-top:14px">📊 Project Expenditure</div>
-        <div id="proj-exp-list">
-          <div class="empty"><div class="ei">📊</div><div class="et">Projects add అయిన తర్వాత expenditure కనపడుతుంది</div></div>
+        <!-- Venture-level summary -->
+        <div id="exp-venture-summary"></div>
+        <!-- Project list for expenditure -->
+        <div id="exp-project-list">
+          <div class="empty"><div class="ei">📊</div><div class="et">Projects లేవు</div></div>
         </div>
-        <button class="btn rose full" style="margin-top:10px" onclick="openModal('add-proj-expense')">+ Add Expenditure</button>
       </div>
     </div>
 
@@ -1266,6 +1271,10 @@ body{background:var(--bg);color:var(--tx);font-family:'Noto Sans Telugu',sans-se
         <label class="fl">Purchase Date</label>
         <input class="fi" id="p-date" type="date">
       </div>
+    </div>
+    <div>
+      <label class="fl">Deal End Date (Balance Deadline)</label>
+      <input class="fi" id="p-deal-end-date" type="date">
     </div>
     <label class="fl">Location / Survey No</label>
     <input class="fi" id="p-location" placeholder="ఉదా: Chinnachowk, Survey 620/1">
@@ -1873,6 +1882,16 @@ var state = loadData();
       proj.plots = [];
     }
     proj.projType = 'venture';
+  });
+  // Migrate plot construction expenses
+  (state.projects||[]).forEach(function(proj) {
+    (proj.plots||[]).forEach(function(plt) {
+      if (!plt.constructionExpenses) {
+        plt.constructionExpenses = [{ id:'ce_0', desc:'Advance Construction', amount: plt.constructionCost||0, date:'' }];
+        plt.miscExpenses = [];
+        plt.otherExpenses = [];
+      }
+    });
   });
 })();
 
@@ -4246,6 +4265,7 @@ function saveProject() {
     pricePerCent: Number(document.getElementById('p-price-per-cent').value) || 0,
     status: document.getElementById('p-status').value,
     date: document.getElementById('p-date').value || today(),
+    dealEndDate: document.getElementById('p-deal-end-date').value || '',
     location: document.getElementById('p-location').value.trim(),
     agreements: existing ? (existing.agreements||[]) : [],
     plots: []
@@ -4267,7 +4287,10 @@ function saveProject() {
       advanceReceived: ext.advanceReceived || 0,
       partialPayments: ext.partialPayments || [],
       constructionCost: ext.constructionCost || 0,
-      phases: ext.phases || {foundation:0,structure:0,roof:0,electrical:0,plumbing:0,finishing:0}
+      phases: ext.phases || {foundation:0,structure:0,roof:0,electrical:0,plumbing:0,finishing:0},
+      constructionExpenses: ext.constructionExpenses || undefined,
+      miscExpenses: ext.miscExpenses || undefined,
+      otherExpenses: ext.otherExpenses || undefined
     };
   });
 
@@ -4298,7 +4321,7 @@ function saveProject() {
 
   saveData(); renderProjects();
   closeModal('add-project');
-  ['p-name','p-landcost','p-cents','p-price-per-cent','p-location'].forEach(function(id){
+  ['p-name','p-landcost','p-cents','p-price-per-cent','p-location','p-deal-end-date'].forEach(function(id){
     var el = document.getElementById(id); if(el) el.value='';
   });
   document.getElementById('p-edit-id').value = '';
@@ -4324,6 +4347,7 @@ function openEditProject(projId) {
   calcLandTotal();
   document.getElementById('p-status').value = proj.status || 'active';
   document.getElementById('p-date').value = proj.date || '';
+  document.getElementById('p-deal-end-date').value = proj.dealEndDate || '';
   document.getElementById('p-location').value = proj.location || '';
   // Load existing land payments
   _pendingLandPmts = (state.landPayments||[])
@@ -4400,35 +4424,20 @@ function renderProjects() {
         +'<span class="proj-status '+proj.status+'">'+(statusMap[proj.status]||proj.status)+'</span>'
       +'</div>'
       +'<div class="proj-body" id="pd'+pidx+'" style="display:none">'
+        +(proj.dealEndDate ? '<div style="font-size:11px;color:var(--rose);padding:4px 14px 0;font-weight:600">⏰ Deadline: '+escH(proj.dealEndDate)+'</div>' : '')
         +'<div class="profit-summary">'
           +'<div class="ps-box"><div class="pl">Total Land</div><div class="pv" style="color:var(--amb)">'+proj.totalCents+' cents</div></div>'
           +'<div class="ps-box"><div class="pl">Deal Value</div><div class="pv" style="color:var(--rose)">'+rup(totalLandDeal)+'</div></div>'
-          +'<div class="ps-box"><div class="pl">Paid So Far</div><div class="pv" style="color:'+(landPaidSoFar>0?'var(--teal)':'var(--tx3)')+'">'+rup(landPaidSoFar)+'</div></div>'
+          +'<div class="ps-box"><div class="pl">Paid</div><div class="pv" style="color:'+(landPaidSoFar>0?'var(--teal)':'var(--tx3)')+'">'+rup(landPaidSoFar)+'</div></div>'
+          +'<div class="ps-box"><div class="pl">Balance</div><div class="pv" style="color:var(--rose)">'+rup(totalLandDeal - landPaidSoFar)+'</div></div>'
         +'</div>'
         +'<div class="profit-summary" style="padding-top:0">'
-          +'<div class="ps-box"><div class="pl">Plots</div><div class="pv" style="color:var(--sky)">'+plots.length+' total</div></div>'
-          +'<div class="ps-box"><div class="pl">Sold</div><div class="pv" style="color:var(--sage)">'+soldPlots.length+' / '+plots.length+'</div></div>'
-          +'<div class="ps-box"><div class="pl">Cents Left</div><div class="pv" style="color:var(--amb)">'+totalCentsLeft+' c</div></div>'
+          +'<div class="ps-box"><div class="pl">Total Plots</div><div class="pv" style="color:var(--sky)">'+plots.length+'</div></div>'
+          +'<div class="ps-box"><div class="pl">Sold</div><div class="pv" style="color:var(--sage)">'+soldPlots.length+'</div></div>'
+          +'<div class="ps-box"><div class="pl">Total Cents</div><div class="pv" style="color:var(--amb)">'+proj.totalCents+' c</div></div>'
+          +'<div class="ps-box"><div class="pl">Remaining</div><div class="pv" style="color:var(--teal)">'+totalCentsLeft+' c</div></div>'
         +'</div>'
-        +'<div class="profit-summary" style="padding-top:0">'
-          +'<div class="ps-box"><div class="pl">Exp. Sale</div><div class="pv" style="color:var(--teal)">'+rup(totalExpSale)+'</div></div>'
-          +'<div class="ps-box"><div class="pl">Received</div><div class="pv" style="color:var(--sage)">'+rup(totalSaleReceived)+'</div></div>'
-          +'<div class="ps-box"><div class="pl">Exp. Profit</div><div class="pv" style="color:'+profitColor+'">'+rup(expProfit)+'</div></div>'
-        +'</div>'
-        +(plots.length
-          ? '<div style="padding:0 14px 6px;font-size:12px;color:var(--tx2)">Tap a plot to update sale details / phases</div>'
-            +'<div class="house-grid">'+plotTiles
-              +'<div class="house-tile" style="border-style:dashed;border-color:rgba(58,232,200,0.4);background:rgba(58,232,200,0.03);display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:90px" onclick="addPlotInline('+pidx+')">'
-                +'<div class="ht-ico">➕</div>'
-                +'<div class="ht-name" style="color:var(--teal);font-size:11px">Add Plot</div>'
-              +'</div>'
-            +'</div>'
-          : '<div class="house-grid"><div class="house-tile" style="border-style:dashed;border-color:rgba(58,232,200,0.4);background:rgba(58,232,200,0.03);display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:90px" onclick="addPlotInline('+pidx+')">'
-              +'<div class="ht-ico">➕</div>'
-              +'<div class="ht-name" style="color:var(--teal);font-size:11px">Add Plot</div>'
-            +'</div></div>'
-        )
-        +'<div style="display:flex;gap:8px;padding:0 14px 12px">'
+        +'<div style="display:flex;gap:8px;padding:4px 14px 12px">'
           +"<button class='btn ghost sm' style='flex:1;font-size:12px' onclick=\"openEditProject('"+proj.id+"')\">✏️ Edit Venture</button>"
           +'<button class="btn ghost sm" style="flex:1;font-size:12px;color:var(--rose)" data-proj="'+pidx+'" onclick="deleteProjByIndex(this)">🗑️ Delete Venture</button>'
         +'</div>'
@@ -4486,27 +4495,52 @@ function openPlotByIndex(el) {
   var plt = (proj.plots||[])[pli];
   if (!plt) return;
 
-  var isHouse = plt.type === 'house';
+  // Migrate old data
+  if (!plt.constructionExpenses) {
+    plt.constructionExpenses = [{ id:'ce_0', desc:'Advance Construction', amount: plt.constructionCost||0, date:'' }];
+    plt.miscExpenses = [];
+    plt.otherExpenses = [];
+    saveData();
+  }
+
   var isSold = plt.status === 'sold';
   var typeLocked = !!(plt.salePrice || plt.constructionCost > 0 || (plt.partialPayments||[]).length > 0 || plt.buyer || plt.status !== 'planned');
+
   document.getElementById('house-modal-title').textContent = proj.name + ' — Plot ' + escH(plt.plotNo||String(pli+1));
-  var phases = ['foundation','structure','roof','electrical','plumbing','finishing'];
-  var phaseNames = {foundation:'Foundation 🏗️',structure:'Structure 🧱',roof:'Roof 🏠',electrical:'Electrical ⚡',plumbing:'Plumbing 🔧',finishing:'Finishing 🎨'};
+
+  // Calculate land advance for this plot
+  var landPaid = (state.landPayments||[]).filter(function(p){ return p.projId===proj.id; })
+                 .reduce(function(s,p){ return s+Number(p.amount||0); },0);
+  var landAdvanceForPlot = proj.totalCents > 0 ? (landPaid / proj.totalCents) * Number(plt.sizeInCents||0) : 0;
+
+  // Expense totals
+  var constTotal = (plt.constructionExpenses||[]).reduce(function(s,e){ return s+Number(e.amount||0); },0);
+  var miscTotal = (plt.miscExpenses||[]).reduce(function(s,e){ return s+Number(e.amount||0); },0);
+  var otherTotal = (plt.otherExpenses||[]).reduce(function(s,e){ return s+Number(e.amount||0); },0);
+  var totalConstruction = constTotal + miscTotal + otherTotal;
+  var totalInvestment = totalConstruction + landAdvanceForPlot;
 
   var body = '';
 
-  // Plot info (editable)
-  body += '<div class="seg-t">Plot Info</div>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">'
-      +'<div><label class="fl">Plot No</label>'
-        +'<input type="text" class="fi fi-mono" value="'+escH(plt.plotNo||'')+'" placeholder="1 / A1" data-pi="'+pi+'" data-pli="'+pli+'" onchange="updatePlotField(this,\'plotNo\',\'text\')" style="text-align:center"></div>'
-      +'<div><label class="fl">Size (Cents)</label>'
-        +'<input type="number" class="fi fi-mono" value="'+(plt.sizeInCents||'')+'" placeholder="3" data-pi="'+pi+'" data-pli="'+pli+'" onchange="updatePlotField(this,\'sizeInCents\',\'num\')"></div>'
-    +'</div>'
-    +'<label class="fl">Type</label>';
+  // Plot Info header
+  body += '<div style="display:flex;gap:10px;align-items:center;padding:4px 0 10px">'
+    +'<div style="font-size:22px;font-weight:700;font-family:JetBrains Mono;color:var(--amb)">Plot '+escH(plt.plotNo||String(pli+1))+'</div>'
+    +'<div style="font-size:14px;color:var(--tx2);font-family:JetBrains Mono">'+(plt.sizeInCents||0)+' cents</div>'
+  +'</div>';
+
+  // Editable Plot No + Size
+  body += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">'
+    +'<div><label class="fl">Plot No</label>'
+      +'<input type="text" class="fi fi-mono" value="'+escH(plt.plotNo||'')+'" placeholder="1 / A1" data-pi="'+pi+'" data-pli="'+pli+'" onchange="updatePlotField(this,\'plotNo\',\'text\')" style="text-align:center"></div>'
+    +'<div><label class="fl">Size (Cents)</label>'
+      +'<input type="number" class="fi fi-mono" value="'+(plt.sizeInCents||'')+'" placeholder="3" data-pi="'+pi+'" data-pli="'+pli+'" onchange="updatePlotField(this,\'sizeInCents\',\'num\')"></div>'
+  +'</div>';
+
+  // Type
+  body += '<label class="fl">Type</label>';
   if (typeLocked) {
     body += '<div class="fi" style="opacity:0.7;pointer-events:none;display:flex;align-items:center;gap:8px">'
-      +(isHouse?'🏗️ House (build &amp; sell)':'📋 Plot (sell as-is)')
+      +(plt.type==='house'?'🏗️ House (build &amp; sell)':'📋 Plot (sell as-is)')
       +'<span style="margin-left:auto;font-size:10px;color:var(--tx3);background:var(--s3);padding:2px 7px;border-radius:5px">locked</span>'
     +'</div>';
   } else {
@@ -4516,32 +4550,84 @@ function openPlotByIndex(el) {
     +'</select>';
   }
 
-  // Construction phases (house only)
-  if (isHouse) {
-    var phases2 = plt.phases || {};
-    var totalPhase = phases.reduce(function(s,ph){ return s+Number(phases2[ph]||0); },0);
-    body += '<div class="seg-t" style="margin-top:12px">Construction Phases</div>';
-    phases.forEach(function(ph){
-      body += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:9px">'
-        +'<span style="flex:1;font-size:13px">'+phaseNames[ph]+'</span>'
-        +'<input type="number" value="'+(phases2[ph]||0)+'" '
-        +'data-pi="'+pi+'" data-pli="'+pli+'" data-ph="'+ph+'" '
-        +'onchange="updatePlotPhase(this)" '
-        +'style="width:110px;background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:7px 10px;color:var(--tx);font-family:JetBrains Mono;font-size:13px;text-align:right">'
-      +'</div>';
-    });
-    body += '<div style="display:flex;justify-content:space-between;padding:8px 0;border-top:1px solid var(--bd);margin-bottom:10px">'
-      +'<span style="color:var(--tx2)">Total Construction</span>'
-      +'<span style="font-weight:700;font-family:JetBrains Mono;color:var(--amb)" id="hm-total">'+rup(totalPhase)+'</span>'
+  // Land Advance section
+  body += '<div class="seg-t" style="margin-top:12px">🌾 Land Advance</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">'
+      +'<div><label class="fl">Description</label>'
+        +'<div class="fi" style="opacity:0.7;font-size:12px">Advance paid for land</div></div>'
+      +'<div><label class="fl">Amount (₹)</label>'
+        +'<div class="fi fi-mono" style="opacity:0.7;color:var(--amb)">'+rup(landAdvanceForPlot)+'</div></div>'
     +'</div>';
-  }
 
-  // Sale details
-  body += '<div class="seg-t">Sale / Status</div>'
+  // Construction Expenses section
+  body += '<div class="seg-t" style="margin-top:12px">🏗️ Construction Expenses</div>';
+  (plt.constructionExpenses||[]).forEach(function(ce, ceIdx) {
+    var isFirst = ceIdx === 0;
+    body += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:6px;align-items:center;margin-bottom:6px">'
+      +(isFirst
+        ? '<div class="fi" style="opacity:0.7;font-size:12px">Advance Construction</div>'
+        : '<input type="text" class="fi" value="'+escH(ce.desc||'')+'" placeholder="Description" '
+            +'onchange="updateConstructionExpense('+pi+','+pli+','+ceIdx+',\'desc\',\'text\',this)" style="font-size:12px">')
+      +'<input type="number" class="fi fi-mono" value="'+(ce.amount||'')+'" placeholder="Amount" '
+        +'onchange="updateConstructionExpense('+pi+','+pli+','+ceIdx+',\'amount\',\'num\',this)" style="font-size:12px">'
+      +'<input type="date" class="fi" value="'+(ce.date||'')+'" '
+        +'onchange="updateConstructionExpense('+pi+','+pli+','+ceIdx+',\'date\',\'text\',this)" style="font-size:12px">'
+      +(isFirst
+        ? '<div style="width:28px"></div>'
+        : '<button onclick="deleteConstructionExpense('+pi+','+pli+','+ceIdx+')" style="background:none;border:none;color:var(--rose);cursor:pointer;font-size:16px;padding:4px">🗑️</button>')
+    +'</div>';
+  });
+  body += '<button class="btn ghost sm" style="width:100%;margin-bottom:4px" onclick="addConstructionExpense('+pi+','+pli+')">+ Add Construction Expense</button>';
+
+  // Misc Expenses section
+  var miscTypes = ['Registration','Borewell','BoreMotor','Brokerage','ElectricMeter'];
+  body += '<div class="seg-t" style="margin-top:12px">📋 Misc Expenses</div>';
+  (plt.miscExpenses||[]).forEach(function(me, meIdx) {
+    body += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:6px;align-items:center;margin-bottom:6px">'
+      +'<select class="fi" onchange="updateMiscExpense('+pi+','+pli+','+meIdx+',\'type\',\'text\',this)" style="font-size:12px">'
+      +miscTypes.map(function(t){ return '<option value="'+t+'" '+(me.type===t?'selected':'')+'>'+t+'</option>'; }).join('')
+      +'</select>'
+      +'<input type="number" class="fi fi-mono" value="'+(me.amount||'')+'" placeholder="Amount" '
+        +'onchange="updateMiscExpense('+pi+','+pli+','+meIdx+',\'amount\',\'num\',this)" style="font-size:12px">'
+      +'<input type="date" class="fi" value="'+(me.date||'')+'" '
+        +'onchange="updateMiscExpense('+pi+','+pli+','+meIdx+',\'date\',\'text\',this)" style="font-size:12px">'
+      +'<button onclick="deleteMiscExpense('+pi+','+pli+','+meIdx+')" style="background:none;border:none;color:var(--rose);cursor:pointer;font-size:16px;padding:4px">🗑️</button>'
+    +'</div>';
+  });
+  body += '<button class="btn ghost sm" style="width:100%;margin-bottom:4px" onclick="addMiscExpense('+pi+','+pli+')">+ Add Misc Expense</button>';
+
+  // Other Expenses section
+  body += '<div class="seg-t" style="margin-top:12px">📦 Other Expenses</div>';
+  (plt.otherExpenses||[]).forEach(function(oe, oeIdx) {
+    body += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:6px;align-items:center;margin-bottom:6px">'
+      +'<input type="text" class="fi" value="'+escH(oe.desc||'')+'" placeholder="Description" '
+        +'onchange="updateOtherExpense('+pi+','+pli+','+oeIdx+',\'desc\',\'text\',this)" style="font-size:12px">'
+      +'<input type="number" class="fi fi-mono" value="'+(oe.amount||'')+'" placeholder="Amount" '
+        +'onchange="updateOtherExpense('+pi+','+pli+','+oeIdx+',\'amount\',\'num\',this)" style="font-size:12px">'
+      +'<input type="date" class="fi" value="'+(oe.date||'')+'" '
+        +'onchange="updateOtherExpense('+pi+','+pli+','+oeIdx+',\'date\',\'text\',this)" style="font-size:12px">'
+      +'<button onclick="deleteOtherExpense('+pi+','+pli+','+oeIdx+')" style="background:none;border:none;color:var(--rose);cursor:pointer;font-size:16px;padding:4px">🗑️</button>'
+    +'</div>';
+  });
+  body += '<button class="btn ghost sm" style="width:100%;margin-bottom:4px" onclick="addOtherExpense('+pi+','+pli+')">+ Add Other Expense</button>';
+
+  // Expense totals
+  body += '<div style="background:var(--s2);border:1px solid var(--bd);border-radius:9px;padding:10px 12px;margin-top:8px">'
+    +'<div style="display:flex;justify-content:space-between;margin-bottom:4px">'
+      +'<span style="font-size:12px;color:var(--tx2)">Total Construction</span>'
+      +'<span style="font-family:JetBrains Mono;font-size:12px;font-weight:700;color:var(--amb)" id="hm-total">'+rup(totalConstruction)+'</span>'
+    +'</div>'
+    +'<div style="display:flex;justify-content:space-between">'
+      +'<span style="font-size:12px;color:var(--tx2)">Total Investment (incl. Land)</span>'
+      +'<span style="font-family:JetBrains Mono;font-size:13px;font-weight:700;color:var(--rose)">'+rup(totalInvestment)+'</span>'
+    +'</div>'
+  +'</div>';
+
+  // Sale / Status
+  body += '<div class="seg-t" style="margin-top:14px">Sale / Status</div>'
     +'<label class="fl">Status</label>'
     +'<select class="fi" data-pi="'+pi+'" data-pli="'+pli+'" onchange="updatePlotField(this,\'status\',\'text\');openPlotByIndex(this.closest(\'.mover\').querySelector(\'[data-pi]\'))">'
       +'<option value="planned" '+(plt.status==='planned'?'selected':'')+'>📋 Planned</option>'
-      +(isHouse?'<option value="building" '+(plt.status==='building'?'selected':'')+'>🏗️ Building</option>':'')
       +'<option value="sold" '+(plt.status==='sold'?'selected':'')+'>✅ Sold</option>'
     +'</select>';
 
@@ -4587,6 +4673,15 @@ function openPlotByIndex(el) {
     body += '<div style="background:rgba(122,200,90,0.08);border:1px solid rgba(122,200,90,0.25);border-radius:9px;padding:8px 12px;margin-top:4px;display:flex;justify-content:space-between;align-items:center">'
       +'<span style="font-size:12px;font-weight:700;color:var(--tx1)">Total Amount Received</span>'
       +'<span style="font-family:JetBrains Mono;font-size:13px;font-weight:700;color:var(--sage)">'+rup(advTotal)+'</span>'
+    +'</div>';
+
+    // Plot Profit
+    var landCostForPlot = proj.totalCents > 0 ? (Number(proj.landCost||0) / proj.totalCents) * Number(plt.sizeInCents||0) : 0;
+    var plotProfit = Number(plt.salePrice||0) - (landCostForPlot + totalConstruction);
+    var profitColor = plotProfit >= 0 ? 'var(--sage)' : 'var(--rose)';
+    body += '<div style="background:rgba(122,200,90,0.05);border:1px solid rgba(122,200,90,0.2);border-radius:9px;padding:8px 12px;margin-top:8px;display:flex;justify-content:space-between;align-items:center">'
+      +'<span style="font-size:12px;font-weight:700;color:var(--tx2)">Plot Profit</span>'
+      +'<span style="font-family:JetBrains Mono;font-size:13px;font-weight:700;color:'+profitColor+'">'+rup(plotProfit)+'</span>'
     +'</div>';
   } else {
     body += '<div style="font-size:12px;color:var(--tx3);margin-top:10px;padding:8px 10px;background:var(--s3);border-radius:8px">Sale Price &amp; Payments visible after marking as ✅ Sold</div>';
@@ -4643,6 +4738,72 @@ function deletePartialPayment(pi, pli, ppIdx) {
   var plt = state.projects[pi].plots[pli];
   if (!plt.partialPayments) return;
   plt.partialPayments.splice(ppIdx, 1);
+  saveData();
+  openPlotByIndex({dataset:{proj:String(pi),plot:String(pli)}});
+}
+
+// Construction Expense helpers
+function addConstructionExpense(pi, pli) {
+  var plt = state.projects[pi].plots[pli];
+  if (!plt.constructionExpenses) plt.constructionExpenses = [];
+  plt.constructionExpenses.push({ id:'ce_'+Date.now(), desc:'', amount:0, date:'' });
+  saveData();
+  openPlotByIndex({dataset:{proj:String(pi),plot:String(pli)}});
+}
+function updateConstructionExpense(pi, pli, idx, field, type, el) {
+  var plt = state.projects[pi].plots[pli];
+  if (!plt.constructionExpenses || !plt.constructionExpenses[idx]) return;
+  plt.constructionExpenses[idx][field] = type==='num' ? (Number(el.value)||0) : el.value;
+  saveData();
+}
+function deleteConstructionExpense(pi, pli, idx) {
+  var plt = state.projects[pi].plots[pli];
+  if (!plt.constructionExpenses) return;
+  plt.constructionExpenses.splice(idx, 1);
+  saveData();
+  openPlotByIndex({dataset:{proj:String(pi),plot:String(pli)}});
+}
+
+// Misc Expense helpers
+function addMiscExpense(pi, pli) {
+  var plt = state.projects[pi].plots[pli];
+  if (!plt.miscExpenses) plt.miscExpenses = [];
+  plt.miscExpenses.push({ id:'me_'+Date.now(), type:'Registration', amount:0, date:'' });
+  saveData();
+  openPlotByIndex({dataset:{proj:String(pi),plot:String(pli)}});
+}
+function updateMiscExpense(pi, pli, idx, field, type, el) {
+  var plt = state.projects[pi].plots[pli];
+  if (!plt.miscExpenses || !plt.miscExpenses[idx]) return;
+  plt.miscExpenses[idx][field] = type==='num' ? (Number(el.value)||0) : el.value;
+  saveData();
+}
+function deleteMiscExpense(pi, pli, idx) {
+  var plt = state.projects[pi].plots[pli];
+  if (!plt.miscExpenses) return;
+  plt.miscExpenses.splice(idx, 1);
+  saveData();
+  openPlotByIndex({dataset:{proj:String(pi),plot:String(pli)}});
+}
+
+// Other Expense helpers
+function addOtherExpense(pi, pli) {
+  var plt = state.projects[pi].plots[pli];
+  if (!plt.otherExpenses) plt.otherExpenses = [];
+  plt.otherExpenses.push({ id:'oe_'+Date.now(), desc:'', amount:0, date:'' });
+  saveData();
+  openPlotByIndex({dataset:{proj:String(pi),plot:String(pli)}});
+}
+function updateOtherExpense(pi, pli, idx, field, type, el) {
+  var plt = state.projects[pi].plots[pli];
+  if (!plt.otherExpenses || !plt.otherExpenses[idx]) return;
+  plt.otherExpenses[idx][field] = type==='num' ? (Number(el.value)||0) : el.value;
+  saveData();
+}
+function deleteOtherExpense(pi, pli, idx) {
+  var plt = state.projects[pi].plots[pli];
+  if (!plt.otherExpenses) return;
+  plt.otherExpenses.splice(idx, 1);
   saveData();
   openPlotByIndex({dataset:{proj:String(pi),plot:String(pli)}});
 }
@@ -4716,6 +4877,124 @@ function renderOverallProfit(projects) {
     +'<div class="ps-box"><div class="pl">Expected Profit</div><div class="pv" style="color:'+(expProfit>0?'var(--sage)':'var(--rose)')+'">'+rup(expProfit)+'</div></div>'
     +'<div class="ps-box"><div class="pl">ROI %</div><div class="pv" style="color:'+(expROI>0?'var(--sage)':'var(--rose)')+'">'+expROI+'%</div></div>'
   +'</div>';
+}
+
+// ════════════════════════════════════════════════════════
+// EXPENDITURE SCREEN
+// ════════════════════════════════════════════════════════
+function renderExpenditureScreen() {
+  var summaryEl = document.getElementById('exp-venture-summary');
+  var listEl = document.getElementById('exp-project-list');
+  if (!summaryEl || !listEl) return;
+
+  var projects = state.projects || [];
+  if (!projects.length) {
+    listEl.innerHTML = '<div class="empty"><div class="ei">📊</div><div class="et">Projects లేవు</div></div>';
+    summaryEl.innerHTML = '';
+    return;
+  }
+
+  var totalLandPaid = 0, totalConstruction = 0, totalMisc = 0;
+  var totalPlots = 0, totalSold = 0;
+  var totalAdvancesReceived = 0, totalExpectedReceivable = 0;
+  var totalInterestPaid = 0;
+  var totalProfit = 0;
+
+  (state.loanPayments||[]).forEach(function(lp){
+    totalInterestPaid += Number(lp.interest||0);
+  });
+
+  projects.forEach(function(proj) {
+    var landPaid = (state.landPayments||[]).filter(function(p){ return p.projId===proj.id; })
+                   .reduce(function(s,p){ return s+Number(p.amount||0); },0);
+    totalLandPaid += landPaid;
+
+    (proj.plots||[]).forEach(function(plt) {
+      totalPlots++;
+      if (!plt.constructionExpenses) {
+        plt.constructionExpenses = [{ id:'ce_0', desc:'Advance Construction', amount: plt.constructionCost||0, date:'' }];
+        plt.miscExpenses = [];
+        plt.otherExpenses = [];
+      }
+      var constTotal = (plt.constructionExpenses||[]).reduce(function(s,e){ return s+Number(e.amount||0); },0);
+      var miscTotal = (plt.miscExpenses||[]).reduce(function(s,e){ return s+Number(e.amount||0); },0);
+      var otherTotal = (plt.otherExpenses||[]).reduce(function(s,e){ return s+Number(e.amount||0); },0);
+      totalConstruction += constTotal;
+      totalMisc += miscTotal + otherTotal;
+
+      if (plt.status === 'sold') {
+        totalSold++;
+        var received = Number(plt.advanceReceived||0) + (plt.partialPayments||[]).reduce(function(s,pp){ return s+Number(pp.amount||0); },0);
+        totalAdvancesReceived += received;
+        totalExpectedReceivable += Number(plt.salePrice||0);
+        var landCostForPlot = proj.totalCents > 0 ? (landPaid / proj.totalCents) * Number(plt.sizeInCents||0) : 0;
+        var plotProfit = Number(plt.salePrice||0) - (landCostForPlot + constTotal + miscTotal + otherTotal);
+        totalProfit += plotProfit;
+      }
+    });
+  });
+
+  var totalInvested = totalLandPaid + totalConstruction + totalMisc;
+
+  summaryEl.innerHTML = '<div class="profit-summary">'
+    + '<div class="ps-box"><div class="pl">Total Invested</div><div class="pv" style="color:var(--rose)">'+rup(totalInvested)+'</div></div>'
+    + '<div class="ps-box"><div class="pl">Land Paid</div><div class="pv" style="color:var(--amb)">'+rup(totalLandPaid)+'</div></div>'
+    + '<div class="ps-box"><div class="pl">Construction</div><div class="pv" style="color:var(--sky)">'+rup(totalConstruction)+'</div></div>'
+    + '<div class="ps-box"><div class="pl">Misc</div><div class="pv" style="color:var(--teal)">'+rup(totalMisc)+'</div></div>'
+    + '</div>'
+    + '<div class="profit-summary">'
+    + '<div class="ps-box"><div class="pl">Total Plots</div><div class="pv" style="color:var(--sky)">'+totalPlots+'</div></div>'
+    + '<div class="ps-box"><div class="pl">Sold</div><div class="pv" style="color:var(--sage)">'+totalSold+'</div></div>'
+    + '<div class="ps-box"><div class="pl">Advances Received</div><div class="pv" style="color:var(--teal)">'+rup(totalAdvancesReceived)+'</div></div>'
+    + '<div class="ps-box"><div class="pl">Expected Receivable</div><div class="pv" style="color:var(--amb)">'+rup(totalExpectedReceivable)+'</div></div>'
+    + '</div>'
+    + '<div class="profit-summary">'
+    + '<div class="ps-box"><div class="pl">Interest Paid</div><div class="pv" style="color:var(--rose)">'+rup(totalInterestPaid)+'</div></div>'
+    + '<div class="ps-box"><div class="pl">Total Profit (Sold)</div><div class="pv" style="color:'+(totalProfit>0?'var(--sage)':'var(--rose)')+'">'+rup(totalProfit)+'</div></div>'
+    + '</div>';
+
+  var html = '';
+  projects.forEach(function(proj, pidx) {
+    var plots = proj.plots || [];
+    html += '<div class="proj-card fu">'
+      + '<div class="proj-hdr" onclick="toggleExpDetail(this)" data-exp="'+pidx+'">'
+        + '<div class="proj-ico">🏘️</div>'
+        + '<div style="flex:1;min-width:0">'
+          + '<div class="proj-name">'+escH(proj.name)+'</div>'
+          + '<div style="font-size:11px;color:var(--tx2)">'+plots.length+' plots · '+escH(proj.location||'')+'</div>'
+        + '</div>'
+        + '<span style="font-size:12px;color:var(--tx3)">▼</span>'
+      + '</div>'
+      + '<div class="proj-body" id="expd'+pidx+'" style="display:none">';
+
+    if (plots.length) {
+      plots.forEach(function(plt, pli) {
+        var sc = plt.status==='sold' ? 'sold' : '';
+        html += '<div class="house-tile '+sc+'" style="display:flex;align-items:center;padding:10px 14px;border-radius:10px;margin:4px 14px;cursor:pointer;background:var(--s2);border:1px solid var(--bd)" onclick="openPlotExpenditure('+pidx+','+pli+')">'
+          + '<div style="flex:1">'
+            + '<div style="font-weight:600;font-size:13px">Plot '+escH(plt.plotNo||String(pli+1))+'</div>'
+            + '<div style="font-size:11px;color:var(--tx3)">'+(plt.sizeInCents||0)+' cents · '+(plt.status==='sold'?'✅ Sold':'📋 Planned')+'</div>'
+          + '</div>'
+          + '<span style="font-size:12px;color:var(--tx3)">›</span>'
+        + '</div>';
+      });
+    } else {
+      html += '<div style="font-size:12px;color:var(--tx3);padding:10px 14px">No plots yet</div>';
+    }
+
+    html += '</div></div>';
+  });
+  listEl.innerHTML = html;
+}
+
+function toggleExpDetail(el) {
+  var idx = el.dataset.exp;
+  var body = document.getElementById('expd'+idx);
+  if (body) body.style.display = body.style.display==='none' ? 'block' : 'none';
+}
+
+function openPlotExpenditure(pi, pli) {
+  openPlotByIndex({dataset:{proj:String(pi),plot:String(pli)}});
 }
 
 // ════════════════════════════════════════════════════════
@@ -5304,7 +5583,7 @@ function showSc(name) {
   document.querySelectorAll('.ni').forEach(function(n){ n.classList.remove('on'); });
   var scEl = document.getElementById('sc-'+name);
   if (scEl) scEl.classList.add('on');
-  var names=['home','chat','projects','brain','contacts','docs','finance','settings'];
+  var names=['home','chat','projects','expenditure','brain','contacts','docs','finance','settings'];
   var idx = names.indexOf(name);
   var ni = document.querySelectorAll('.ni')[idx];
   if (ni) ni.classList.add('on');
@@ -5313,6 +5592,7 @@ function showSc(name) {
     if (!document.getElementById('chat-msgs').children.length) injectWelcome();
   }
   if (name==='projects') { renderProjects(); renderProjExp(); }
+  if (name==='expenditure') renderExpenditureScreen();
   if (name==='contacts') renderContacts();
   if (name==='settings') updateSettingsUI();
   if (name==='finance') { renderLoanList(); renderPL(); }
