@@ -4522,7 +4522,8 @@ function openPlotByIndex(el) {
   var constTotal = (plt.constructionExpenses||[]).reduce(function(s,e){ return s+Number(e.amount||0); },0);
   var miscTotal = (plt.miscExpenses||[]).reduce(function(s,e){ return s+Number(e.amount||0); },0);
   var otherTotal = (plt.otherExpenses||[]).reduce(function(s,e){ return s+Number(e.amount||0); },0);
-  var totalConstruction = constTotal + miscTotal + otherTotal;
+  // For plot type: no construction cost, only misc + other
+  var totalConstruction = (plt.type==='house' ? constTotal : 0) + miscTotal + otherTotal;
   var totalInvestment = totalConstruction + landAdvanceForPlot;
 
   var body = '';
@@ -4564,7 +4565,8 @@ function openPlotByIndex(el) {
         +'<div class="fi fi-mono" style="opacity:0.7;color:var(--amb)">'+rup(landAdvanceForPlot)+'</div></div>'
     +'</div>';
 
-  // Construction Expenses section
+  // Construction Expenses section — only for house type
+  if (plt.type === 'house') {
   body += '<div class="seg-t" style="margin-top:12px">🏗️ Construction Expenses</div>';
   (plt.constructionExpenses||[]).forEach(function(ce, ceIdx) {
     var isFirst = ceIdx === 0;
@@ -4583,6 +4585,7 @@ function openPlotByIndex(el) {
     +'</div>';
   });
   body += '<button class="btn ghost sm" style="width:100%;margin-bottom:4px" onclick="addConstructionExpense('+pi+','+pli+')">+ Add Construction Expense</button>';
+  } // end house-only construction
 
   // Misc Expenses section
   var miscTypes = ['Registration','Borewell','BoreMotor','Brokerage','ElectricMeter'];
@@ -4620,11 +4623,13 @@ function openPlotByIndex(el) {
   var centRate = proj.totalCents > 0 ? (Number(proj.landCost||0) / proj.totalCents) : 0;
   var landCostForPlot = centRate * Number(plt.sizeInCents||0);
   var landBalance = landCostForPlot - landAdvanceForPlot;
+  var expLabel = plt.type === 'house' ? 'Total Construction' : 'Misc &amp; Other';
   body += '<div style="background:var(--s2);border:1px solid var(--bd);border-radius:9px;padding:10px 12px;margin-top:8px">'
-    +'<div style="display:flex;justify-content:space-between;margin-bottom:4px">'
-      +'<span style="font-size:12px;color:var(--tx2)">Total Construction</span>'
+    +(totalConstruction > 0 || plt.type === 'house' ?
+      '<div style="display:flex;justify-content:space-between;margin-bottom:4px">'
+      +'<span style="font-size:12px;color:var(--tx2)">'+expLabel+'</span>'
       +'<span style="font-family:JetBrains Mono;font-size:12px;font-weight:700;color:var(--amb)" id="hm-total">'+rup(totalConstruction)+'</span>'
-    +'</div>'
+    +'</div>' : '')
     +'<div style="display:flex;justify-content:space-between;margin-bottom:4px">'
       +'<span style="font-size:12px;color:var(--tx2)">Land Balance</span>'
       +'<span style="font-family:JetBrains Mono;font-size:12px;font-weight:700;color:'+(landBalance<=0?'var(--rose)':'var(--sage)')+'">'+rup(landBalance)+'</span>'
@@ -4688,11 +4693,16 @@ function openPlotByIndex(el) {
     +'</div>';
 
     // Plot Profit
-    var landCostForPlot = proj.totalCents > 0 ? (Number(proj.landCost||0) / proj.totalCents) * Number(plt.sizeInCents||0) : 0;
-    var plotProfit = Number(plt.salePrice||0) - (landCostForPlot + totalConstruction);
+    // Plot type: SoldPrice - (PlotSize × DealCentRate). House type: SoldPrice - (LandCost + Construction)
+    var _dealCentRate = proj.totalCents > 0 ? (Number(proj.landCost||0) / proj.totalCents) : 0;
+    var _landCostForPlt = _dealCentRate * Number(plt.sizeInCents||0);
+    var plotProfit = plt.type === 'plot'
+      ? Number(plt.salePrice||0) - _landCostForPlt
+      : Number(plt.salePrice||0) - (_landCostForPlt + totalConstruction);
     var profitColor = plotProfit >= 0 ? 'var(--sage)' : 'var(--rose)';
+    var profitLabel = plt.type === 'plot' ? 'Plot Profit (Sale − Land)' : 'Plot Profit';
     body += '<div style="background:rgba(122,200,90,0.05);border:1px solid rgba(122,200,90,0.2);border-radius:9px;padding:8px 12px;margin-top:8px;display:flex;justify-content:space-between;align-items:center">'
-      +'<span style="font-size:12px;font-weight:700;color:var(--tx2)">Plot Profit</span>'
+      +'<span style="font-size:12px;font-weight:700;color:var(--tx2)">'+profitLabel+'</span>'
       +'<span style="font-family:JetBrains Mono;font-size:13px;font-weight:700;color:'+profitColor+'">'+rup(plotProfit)+'</span>'
     +'</div>';
   } else {
@@ -4964,7 +4974,8 @@ function renderExpenditureScreen() {
         plt.miscExpenses = [];
         plt.otherExpenses = [];
       }
-      var constTotal = (plt.constructionExpenses||[]).reduce(function(s,e){ return s+Number(e.amount||0); },0);
+      var constTotal = plt.type === 'house'
+        ? (plt.constructionExpenses||[]).reduce(function(s,e){ return s+Number(e.amount||0); },0) : 0;
       var miscTotal = (plt.miscExpenses||[]).reduce(function(s,e){ return s+Number(e.amount||0); },0);
       var otherTotal = (plt.otherExpenses||[]).reduce(function(s,e){ return s+Number(e.amount||0); },0);
       totalConstruction += constTotal;
@@ -4975,8 +4986,12 @@ function renderExpenditureScreen() {
         var received = Number(plt.advanceReceived||0) + (plt.partialPayments||[]).reduce(function(s,pp){ return s+Number(pp.amount||0); },0);
         totalAdvancesReceived += received;
         totalExpectedReceivable += Number(plt.salePrice||0);
-        var landCostForPlot = proj.totalCents > 0 ? (landPaid / proj.totalCents) * Number(plt.sizeInCents||0) : 0;
-        var plotProfit = Number(plt.salePrice||0) - (landCostForPlot + constTotal + miscTotal + otherTotal);
+        var centRateForProj = proj.totalCents > 0 ? (landPaid / proj.totalCents) : 0;
+        var landCostForPlot = centRateForProj * Number(plt.sizeInCents||0);
+        // Plot type: profit = SoldPrice - (PlotSize × DealCentRate). House: includes construction.
+        var plotProfit = plt.type === 'plot'
+          ? Number(plt.salePrice||0) - landCostForPlot
+          : Number(plt.salePrice||0) - (landCostForPlot + constTotal + miscTotal + otherTotal);
         totalProfit += plotProfit;
       }
     });
@@ -6402,14 +6417,26 @@ function toggleEmiPaid(loanId, origDate) {
   }
   entry.paid = !entry.paid;
   if (entry.paid) {
+    // Calculate interest/principal split based on current outstanding balance (bank logic)
+    var existingPmts = (state.loanPayments||[]).filter(function(p){ return p.loanId===loanId; });
+    var paidPrinSoFar = existingPmts.reduce(function(s,p){ return s+Number(p.principalPart||0); },0);
+    var outstandingBal = Math.max(Number(loan.principal||0) - paidPrinSoFar, 0);
+    var mRate = loan.rateType==='pm' ? Number(loan.rate||0)/100
+              : loan.rateType==='pa' ? Number(loan.rate||0)/100/12
+              : 0;
+    var intPart = (loan.rateType==='0' || !loan.rate) ? 0
+                : loan.rateType==='flat' ? Number(loan.rate||0)
+                : Math.round(outstandingBal * mRate);
+    intPart = Math.min(intPart, entry.amount);
+    var prinPart = Math.max(entry.amount - intPart, 0);
     var pmt = { id:'pmt_emi_'+Date.now(), loanId:loanId, date:entry.date, amount:entry.amount,
-                interestPart:0, principalPart:0, notes:'EMI', isEmi:true, emiOrigDate:origDate };
+                interestPart:intPart, principalPart:prinPart, notes:'EMI', isEmi:true, emiOrigDate:origDate };
     if (!state.loanPayments) state.loanPayments=[];
     state.loanPayments.push(pmt);
     entry.pmtId = pmt.id;
     pushToSheet('LoanPayments',
       ['id','loanId','date','amount','interestPart','principalPart','notes'],
-      [pmt.id, pmt.loanId, pmt.date, pmt.amount, 0, 0, 'EMI']
+      [pmt.id, pmt.loanId, pmt.date, pmt.amount, intPart, prinPart, 'EMI']
     );
   } else {
     if (entry.pmtId) {
@@ -6742,6 +6769,9 @@ function renderLoanList() {
 function saveEmiAndRefresh() {
   saveData();
   renderLoanList();
+  // Collapse all loan cards — "close screen"
+  var lbodies = document.querySelectorAll('[id^="lbody_"]');
+  for (var i=0; i<lbodies.length; i++) lbodies[i].style.display='none';
   toast('EMI saved ✓', 'ok');
 }
 
@@ -7020,6 +7050,8 @@ function calcAccruedInterest(loan, upToDate) {
 }
 
 // ── Render P&L Summary ──
+// Finance logic: Revenue = SOLD plots' salePrice. COGS = proportional land + build/misc/other per plot.
+// Gross Profit = Revenue - COGS. Interest = company-wide (all loan payments). Net = Gross - Interest.
 function renderPL() {
   var elOverall = document.getElementById('pl-overall');
   var elList    = document.getElementById('pl-list');
@@ -7034,100 +7066,138 @@ function renderPL() {
     return;
   }
 
-  var totalIntPaidAll = (state.loanPayments||[]).reduce(function(s,p){ return s+Number(p.interestPart||0); },0);
-  var totalBorrowed   = loans.reduce(function(s,l){ return s+Number(l.principal||0); },0);
-  var totalOutstanding= loans.reduce(function(s,l){
-    var pmts=(state.loanPayments||[]).filter(function(p){ return p.loanId===l.id; });
-    var paid=pmts.reduce(function(ss,p){ return ss+Number(p.principalPart||0); },0);
-    return s+Math.max(l.principal-paid,0);
-  },0);
+  // Company-wide finance figures
+  var totalInterestPaid = (state.loanPayments||[]).reduce(function(s,p){ return s+Number(p.interestPart||0); },0);
+  var totalBorrowed     = loans.reduce(function(s,l){ return s+Number(l.principal||0); },0);
+  var totalOutstanding  = loans.reduce(function(s,l){
+    var pmts = (state.loanPayments||[]).filter(function(p){ return p.loanId===l.id; });
+    var paid = pmts.reduce(function(ss,p){ return ss+Number(p.principalPart||0); },0);
+    return s + Math.max(Number(l.principal||0) - paid, 0);
+  }, 0);
 
-  var activeCount = projects.filter(function(p){ return p.status!=='done'; }).length || projects.length;
-
-  var html=''; var overallNet=0; var overallSpend=0; var overallIncome=0;
-  var overallPaidLand=0; var hasAnyIncome=false;
+  var html = '';
+  // Overall accumulators
+  var allRevenue = 0, allCOGS = 0, allReceived = 0, allCostIncurred = 0;
+  var hasSales = false;
 
   projects.forEach(function(proj) {
-    var totalLandCost    = Number(proj.landCost||0)||(Number(proj.totalCents||0)*Number(proj.pricePerCent||0));
-    var landPmts         = (state.landPayments||[]).filter(function(p){ return p.projId===proj.id; });
-    var actualPaidLand   = landPmts.reduce(function(s,p){ return s+Number(p.amount||0); },0);
-    var landCostForCalc  = actualPaidLand > 0 ? actualPaidLand : totalLandCost;
-    var constructionCost = (proj.plots||[]).filter(function(p){ return p.type==='house'; }).reduce(function(s,p){ return s+Number(p.constructionCost||0); },0);
-    var manualExpTotal   = (state.projExpenses||[]).filter(function(e){ return e.projId===proj.id; })
-                            .reduce(function(s,e){ return s+Number(e.amount||0); },0);
-    var totalSpend       = landCostForCalc + constructionCost + manualExpTotal;
-    var incomes          = (state.projIncome||[]).filter(function(i){ return i.projId===proj.id; });
-    var totalIncome      = incomes.reduce(function(s,i){ return s+Number(i.amount||0); },0);
-    var hasIncome        = totalIncome > 0;
-    if (hasIncome) hasAnyIncome = true;
-    var allocatedInt     = activeCount > 0 ? Math.round(totalIntPaidAll / activeCount) : 0;
-    var grossProfit      = totalIncome - totalSpend;
-    var netProfit        = hasIncome ? (grossProfit - allocatedInt) : 0;
-    var gpColor          = grossProfit>=0?'var(--sage)':'var(--rose)';
-    var npColor          = netProfit>=0?'var(--sage)':'var(--rose)';
-    var roi              = (hasIncome && totalSpend>0) ? (netProfit/totalSpend*100).toFixed(1)+'%' : '—';
+    var plots = proj.plots || [];
+    var totalCents = Number(proj.totalCents||0);
+    var landPaid = (state.landPayments||[]).filter(function(p){ return p.projId===proj.id; })
+                   .reduce(function(s,p){ return s+Number(p.amount||0); },0);
+    var landCostTotal = Number(proj.landCost||0) || (totalCents * Number(proj.pricePerCent||0));
+    var landForCalc = landPaid > 0 ? landPaid : landCostTotal;
+    var centRate = totalCents > 0 ? landForCalc / totalCents : 0;
 
-    overallNet    += netProfit;
-    overallSpend  += totalSpend;
-    overallIncome += totalIncome;
-    overallPaidLand += actualPaidLand;
-
-    // Land payment progress for P&L card
-    var landLine = '';
-    if (totalLandCost) {
-      if (actualPaidLand > 0 && actualPaidLand < totalLandCost) {
-        landLine = '<div class="pl-row"><span class="pl-lbl">🌾 Land Paid <span style="font-size:10px;color:var(--tx3)">('+rup(actualPaidLand)+' of '+rup(totalLandCost)+')</span></span><span class="pl-val" style="color:var(--amb)">'+rup(actualPaidLand)+'</span></div>';
-      } else {
-        landLine = '<div class="pl-row"><span class="pl-lbl">🌾 Land Cost</span><span class="pl-val" style="color:var(--amb)">'+rup(landCostForCalc)+'</span></div>';
+    // Migrate old plots
+    plots.forEach(function(plt) {
+      if (!plt.constructionExpenses) {
+        plt.constructionExpenses = [{ id:'ce_0', desc:'Advance Construction', amount: plt.constructionCost||0, date:'' }];
+        plt.miscExpenses = [];
+        plt.otherExpenses = [];
       }
-    }
+    });
 
-    var roiBadge = hasIncome
-      ? '<span style="margin-left:auto;font-size:11px;padding:3px 8px;border-radius:6px;background:rgba(122,200,90,0.1);color:var(--sage);font-family:JetBrains Mono">ROI '+roi+'</span>'
+    // Per-plot cost calculation
+    var projConstCost = 0, projMiscOther = 0;
+    var soldRevenue = 0, soldCOGS = 0, soldReceived = 0;
+    var soldCount = 0, wipCount = 0;
+
+    plots.forEach(function(plt) {
+      var plotLand  = centRate * Number(plt.sizeInCents||0);
+      var plotConst = plt.type === 'house'
+        ? (plt.constructionExpenses||[]).reduce(function(s,e){ return s+Number(e.amount||0); },0) : 0;
+      var plotMisc  = (plt.miscExpenses||[]).reduce(function(s,e){ return s+Number(e.amount||0); },0);
+      var plotOther = (plt.otherExpenses||[]).reduce(function(s,e){ return s+Number(e.amount||0); },0);
+      var plotCost  = plotLand + plotConst + plotMisc + plotOther;
+
+      projConstCost += plotConst;
+      projMiscOther += plotMisc + plotOther;
+
+      if (plt.status === 'sold') {
+        soldCount++;
+        hasSales = true;
+        soldRevenue += Number(plt.salePrice||0);
+        soldCOGS    += plotCost;
+        soldReceived += Number(plt.advanceReceived||0)
+          + (plt.partialPayments||[]).reduce(function(s,pp){ return s+Number(pp.amount||0); },0);
+      } else {
+        wipCount++;
+      }
+    });
+
+    // Manual project expenses (overhead/admin)
+    var manualExp = (state.projExpenses||[]).filter(function(e){ return e.projId===proj.id; })
+                    .reduce(function(s,e){ return s+Number(e.amount||0); },0);
+
+    var costIncurred = landForCalc + projConstCost + projMiscOther + manualExp;
+    var grossProfit  = soldRevenue - soldCOGS - manualExp;
+    var gpColor      = grossProfit >= 0 ? 'var(--sage)' : 'var(--rose)';
+    var outstanding  = Math.max(landCostTotal - landPaid, 0);
+    var roi          = (soldRevenue > 0 && soldCOGS > 0)
+      ? ((soldRevenue - soldCOGS) / soldCOGS * 100).toFixed(1) + '%' : '—';
+
+    allRevenue      += soldRevenue;
+    allCOGS         += soldCOGS + manualExp;
+    allReceived     += soldReceived;
+    allCostIncurred += costIncurred;
+
+    var roiBadge = soldRevenue > 0
+      ? '<span style="margin-left:auto;font-size:11px;padding:3px 8px;border-radius:6px;background:rgba(122,200,90,0.1);color:var(--sage);font-family:JetBrains Mono">Margin '+roi+'</span>'
       : '<span style="margin-left:auto;font-size:11px;padding:3px 9px;border-radius:6px;background:var(--s3);color:var(--tx3)">🏗️ In Progress</span>';
 
-    html += '<div class="pl-card fu">'
-      +'<div class="pl-proj-name">🏘️ '+escH(proj.name)
-        + roiBadge
-      +'</div>'
-      + landLine
-      +(constructionCost?'<div class="pl-row"><span class="pl-lbl">🏗️ Construction (phases)</span><span class="pl-val" style="color:var(--sky)">'+rup(constructionCost)+'</span></div>':'')
-      +(manualExpTotal?'<div class="pl-row"><span class="pl-lbl">📤 Other Expenses</span><span class="pl-val" style="color:var(--rose)">'+rup(manualExpTotal)+'</span></div>':'')
-      +'<div class="pl-row"><span class="pl-lbl" style="font-weight:700">Total Paid</span><span class="pl-val" style="color:var(--rose)">'+rup(totalSpend)+'</span></div>';
+    var landLine = landForCalc > 0
+      ? (landPaid > 0 && landPaid < landCostTotal
+        ? '<div class="pl-row"><span class="pl-lbl">🌾 Land Paid <span style="font-size:10px;color:var(--tx3)">('+rup(landPaid)+' of '+rup(landCostTotal)+')</span></span><span class="pl-val" style="color:var(--amb)">'+rup(landPaid)+'</span></div>'
+        : '<div class="pl-row"><span class="pl-lbl">🌾 Land Cost</span><span class="pl-val" style="color:var(--amb)">'+rup(landForCalc)+'</span></div>')
+      : '';
 
-    if (!hasIncome) {
-      html += '<div style="background:rgba(232,184,74,0.06);border:1px solid rgba(232,184,74,0.2);border-radius:9px;padding:10px 12px;margin-top:8px;text-align:center">'
-        +'<div style="font-size:12px;color:var(--tx3);margin-bottom:2px">🏗️ Under Construction</div>'
-        +'<div style="font-size:11px;color:var(--tx3)">P&amp;L will appear once you add income/sales</div>'
+    html += '<div class="pl-card fu">'
+      +'<div class="pl-proj-name">🏘️ '+escH(proj.name) + roiBadge +'</div>'
+      + landLine
+      +(projConstCost ? '<div class="pl-row"><span class="pl-lbl">🏗️ Construction</span><span class="pl-val" style="color:var(--sky)">'+rup(projConstCost)+'</span></div>' : '')
+      +(projMiscOther ? '<div class="pl-row"><span class="pl-lbl">📋 Misc &amp; Other</span><span class="pl-val" style="color:var(--teal)">'+rup(projMiscOther)+'</span></div>' : '')
+      +(manualExp ? '<div class="pl-row"><span class="pl-lbl">📤 Overhead / Admin</span><span class="pl-val" style="color:var(--rose)">'+rup(manualExp)+'</span></div>' : '')
+      +'<div class="pl-row"><span class="pl-lbl" style="font-weight:700">Total Cost Incurred</span><span class="pl-val" style="color:var(--rose)">'+rup(costIncurred)+'</span></div>'
+      +'<div class="pl-row"><span class="pl-lbl" style="color:var(--tx3)">Plots: '+plots.length+' total · '+soldCount+' sold · '+wipCount+' unsold</span></div>';
+
+    if (soldRevenue > 0) {
+      html += '<div style="border-top:1px solid var(--bd);margin:6px 0;padding-top:6px">'
+        +'<div class="pl-row"><span class="pl-lbl">💰 Revenue (Sold plots)</span><span class="pl-val" style="color:var(--sage)">'+rup(soldRevenue)+'</span></div>'
+        +'<div class="pl-row"><span class="pl-lbl">✅ Received So Far</span><span class="pl-val" style="color:var(--teal)">'+rup(soldReceived)+'</span></div>'
+        +(soldReceived < soldRevenue ? '<div class="pl-row"><span class="pl-lbl" style="color:var(--tx3)">Pending Collection</span><span class="pl-val" style="color:var(--amb)">'+rup(soldRevenue-soldReceived)+'</span></div>' : '')
+        +'<div class="pl-row"><span class="pl-lbl">📊 COGS (Sold plots cost)</span><span class="pl-val" style="color:var(--rose)">'+rup(soldCOGS)+'</span></div>'
+        +'<div class="pl-row total" style="background:var(--s3);border-radius:8px;padding:8px 10px;margin-top:4px"><span class="pl-lbl" style="font-size:14px">Gross Profit</span><span class="pl-val" style="font-size:15px;color:'+gpColor+'">'+(grossProfit>=0?'+':'')+rup(grossProfit)+'</span></div>'
       +'</div>';
     } else {
-      html += '<div class="pl-row"><span class="pl-lbl">📥 Total Income</span><span class="pl-val" style="color:var(--teal)">'+rup(totalIncome)+'</span></div>'
-        +'<div class="pl-row total" style="border-top:1px solid var(--bd);padding-top:8px"><span class="pl-lbl">Gross Profit</span><span class="pl-val" style="color:'+gpColor+'">'+(grossProfit>=0?'+':'')+rup(grossProfit)+'</span></div>'
-        +(allocatedInt?'<div class="pl-row"><span class="pl-lbl" style="color:var(--tx2)">− Interest (allocated)</span><span class="pl-val" style="color:var(--rose)">−'+rup(allocatedInt)+'</span></div>':'')
-        +'<div class="pl-row total" style="background:var(--s3);border-radius:8px;padding:8px 10px;margin-top:4px"><span class="pl-lbl" style="font-size:14px">Net Profit</span><span class="pl-val" style="font-size:16px;color:'+npColor+'">'+(netProfit>=0?'+':'')+rup(netProfit)+'</span></div>';
+      html += '<div style="background:rgba(232,184,74,0.06);border:1px solid rgba(232,184,74,0.2);border-radius:9px;padding:8px 12px;margin-top:8px;text-align:center">'
+        +'<div style="font-size:12px;color:var(--tx3)">No plots sold yet — P&amp;L appears on first sale</div>'
+      +'</div>';
     }
     html += '</div>';
   });
 
-  elList.innerHTML=html;
+  elList.innerHTML = html;
 
   if (elOverall) {
-    var ocColor = overallNet>=0?'var(--sage)':'var(--rose)';
-    var overallGrossForDisplay = overallIncome - overallSpend;
-    elOverall.innerHTML='<div style="background:linear-gradient(135deg,rgba(232,184,74,0.08),rgba(58,232,200,0.05));border:1px solid rgba(232,184,74,0.3);border-radius:13px;padding:14px;margin-bottom:4px">'
-      +'<div style="font-size:13px;font-weight:700;color:var(--amb);margin-bottom:10px">📊 Overall P&amp;L — All Projects</div>'
+    var overallGross  = allRevenue - allCOGS;
+    var overallNet    = overallGross - totalInterestPaid;
+    var ogColor       = overallGross >= 0 ? 'var(--sage)' : 'var(--rose)';
+    var onColor       = overallNet   >= 0 ? 'var(--sage)' : 'var(--rose)';
+    elOverall.innerHTML = '<div style="background:linear-gradient(135deg,rgba(232,184,74,0.08),rgba(58,232,200,0.05));border:1px solid rgba(232,184,74,0.3);border-radius:13px;padding:14px;margin-bottom:4px">'
+      +'<div style="font-size:13px;font-weight:700;color:var(--amb);margin-bottom:10px">📊 Company P&amp;L — All Projects</div>'
       +'<div class="fin-summary">'
-        +'<div class="fsum-box"><div class="fsum-lbl">Total Paid Out</div><div class="fsum-val" style="color:var(--rose)">'+rup(overallSpend)+'</div></div>'
-        +'<div class="fsum-box"><div class="fsum-lbl">Total Income</div><div class="fsum-val" style="color:var(--teal)">'+rup(overallIncome)+'</div></div>'
-        +(hasAnyIncome
-          ? '<div class="fsum-box"><div class="fsum-lbl">Gross Profit</div><div class="fsum-val" style="color:'+(overallGrossForDisplay>=0?'var(--sage)':'var(--rose)')+'">'+(overallGrossForDisplay>=0?'+':'')+rup(overallGrossForDisplay)+'</div></div>'
-          : '<div class="fsum-box"><div class="fsum-lbl">Status</div><div class="fsum-val" style="color:var(--tx3);font-size:13px">🏗️ In Progress</div></div>')
-        +'<div class="fsum-box"><div class="fsum-lbl">Total Borrowings</div><div class="fsum-val" style="color:var(--amb)">'+rup(totalBorrowed)+'</div></div>'
-        +'<div class="fsum-box"><div class="fsum-lbl">Interest Paid</div><div class="fsum-val" style="color:var(--sky)">'+rup(totalIntPaidAll)+'</div></div>'
-        +(hasAnyIncome
-          ? '<div class="fsum-box"><div class="fsum-lbl" style="font-weight:700">Net Profit</div><div class="fsum-val" style="color:'+ocColor+';font-size:18px">'+(overallNet>=0?'+':'')+rup(overallNet)+'</div></div>'
-          : '<div class="fsum-box"><div class="fsum-lbl">Outstanding Land</div><div class="fsum-val" style="color:var(--amb)">'+rup(Math.max(0,projects.reduce(function(s,p){ var tl=Number(p.landCost||0)||(Number(p.totalCents||0)*Number(p.pricePerCent||0)); var lp=(state.landPayments||[]).filter(function(x){ return x.projId===p.id; }).reduce(function(ss,x){ return ss+Number(x.amount||0); },0); return s+Math.max(tl-lp,0); },0)))+'</div></div>')
+        +'<div class="fsum-box"><div class="fsum-lbl">Total Borrowed</div><div class="fsum-val" style="color:var(--amb)">'+rup(totalBorrowed)+'</div></div>'
+        +'<div class="fsum-box"><div class="fsum-lbl">Outstanding Debt</div><div class="fsum-val" style="color:var(--rose)">'+rup(totalOutstanding)+'</div></div>'
+        +'<div class="fsum-box"><div class="fsum-lbl">Interest Paid</div><div class="fsum-val" style="color:var(--sky)">'+rup(totalInterestPaid)+'</div></div>'
+        +'<div class="fsum-box"><div class="fsum-lbl">Total Cost Incurred</div><div class="fsum-val" style="color:var(--rose)">'+rup(allCostIncurred)+'</div></div>'
       +'</div>'
+      +(hasSales ? '<div class="fin-summary" style="margin-top:8px">'
+        +'<div class="fsum-box"><div class="fsum-lbl">Revenue (Sold)</div><div class="fsum-val" style="color:var(--sage)">'+rup(allRevenue)+'</div></div>'
+        +'<div class="fsum-box"><div class="fsum-lbl">Received So Far</div><div class="fsum-val" style="color:var(--teal)">'+rup(allReceived)+'</div></div>'
+        +'<div class="fsum-box"><div class="fsum-lbl">Gross Profit</div><div class="fsum-val" style="color:'+ogColor+'">'+(overallGross>=0?'+':'')+rup(overallGross)+'</div></div>'
+        +'<div class="fsum-box"><div class="fsum-lbl" style="font-weight:700">Net Profit</div><div class="fsum-val" style="color:'+onColor+';font-size:18px">'+(overallNet>=0?'+':'')+rup(overallNet)+'</div></div>'
+      +'</div>' : '<div style="padding:8px 0;font-size:12px;color:var(--tx3);text-align:center">Mark plots as Sold to see Revenue &amp; Profit</div>')
     +'</div>';
   }
 }
