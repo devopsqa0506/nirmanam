@@ -872,13 +872,10 @@ body{background:var(--bg);color:var(--tx);font-family:'Noto Sans Telugu',sans-se
         </div>
         <!-- Project Expenditure -->
         <div class="seg-t" style="margin-top:14px">📊 Project Expenditure</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
-          <button class="btn rose full" onclick="openModal('add-proj-expense')">+ Add Expense</button>
-          <button class="btn teal full" onclick="openModal('add-proj-income')">+ Add Income</button>
-        </div>
         <div id="proj-exp-list">
           <div class="empty"><div class="ei">📊</div><div class="et">Projects add అయిన తర్వాత expenditure కనపడుతుంది</div></div>
         </div>
+        <button class="btn rose full" style="margin-top:10px" onclick="openModal('add-proj-expense')">+ Add Expenditure</button>
       </div>
     </div>
 
@@ -4553,11 +4550,14 @@ function openPlotByIndex(el) {
 
   var advTotal = Number(plt.advanceReceived||0) + (plt.partialPayments||[]).reduce(function(s,pp){ return s+Number(pp.amount||0); },0);
   body += '<div style="background:rgba(122,200,90,0.08);border:1px solid rgba(122,200,90,0.25);border-radius:9px;padding:8px 12px;margin-top:4px;display:flex;justify-content:space-between;align-items:center">'
-    +'<span style="font-size:12px;font-weight:700;color:var(--tx1)">Project Received</span>'
+    +'<span style="font-size:12px;font-weight:700;color:var(--tx1)">Total Amount Received</span>'
     +'<span style="font-family:JetBrains Mono;font-size:13px;font-weight:700;color:var(--sage)">'+rup(advTotal)+'</span>'
   +'</div>';
 
-  body += '<button class="btn amb full" style="margin-top:12px" onclick="closeModal(\'house-modal\');renderProjects()">✓ Done</button>';
+  body += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">'
+    +'<button class="btn ghost full" onclick="closeModal(\'house-modal\')">✕ Cancel</button>'
+    +'<button class="btn amb full" onclick="saveData();renderProjects();closeModal(\'house-modal\')">✓ Save</button>'
+  +'</div>';
 
   document.getElementById('house-modal-body').innerHTML = body;
   openModal('house-modal');
@@ -6460,7 +6460,7 @@ function renderProjExp() {
       });
       html += '</div>';
     } else {
-      html += '<div style="font-size:13px;color:var(--tx3);padding:6px 0 10px">No manual expenses yet — use "+ Add Expense" above</div>';
+      html += '<div style="font-size:13px;color:var(--tx3);padding:6px 0 10px">No manual expenses yet — use "+ Add Expenditure" below</div>';
     }
 
     // Total spend
