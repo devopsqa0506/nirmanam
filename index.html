@@ -985,7 +985,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Noto Sans Telugu',sans-se
             <div class="fsum-box"><div class="fsum-lbl">Total Interest Paid</div><div class="fsum-val sky" id="fs-interest">₹0</div></div>
             <div class="fsum-box"><div class="fsum-lbl">Total Principal Paid</div><div class="fsum-val teal" id="fs-principal">₹0</div></div>
           </div>
-          <button class="btn amb full" style="margin-bottom:12px" onclick="openModal('add-loan')">+ Add Loan / Borrowing</button>
+          <button class="btn amb full" style="margin-bottom:12px" onclick="openNewLoanModal()">+ Add Loan / Borrowing</button>
           <div id="loan-list">
             <div class="empty"><div class="ei">🏦</div><div class="et">Loans లేవు</div><div class="es">Bank loans, gold loans, hand loans అన్నీ ఇక్కడ track చేయండి</div></div>
           </div>
@@ -1490,32 +1490,76 @@ body{background:var(--bg);color:var(--tx);font-family:'Noto Sans Telugu',sans-se
   <div class="msheet">
     <div class="mgrip"></div>
     <div class="mt" id="loan-modal-title">🏦 Add Loan / Borrowing</div>
-    <label class="fl">Lender పేరు *</label>
-    <input class="fi" id="ln-name" placeholder="ఉదా: SBI Bank, Ramesh Anna, Gold Loan, Chit Fund">
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      <div><label class="fl">Principal Amount (₹) *</label><input class="fi fi-mono" id="ln-principal" type="number" placeholder="200000" oninput="calcEmiFromForm()"></div>
-      <div><label class="fl">Date Borrowed *</label><input class="fi" id="ln-date" type="date"></div>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      <div><label class="fl">Interest Rate</label><input class="fi fi-mono" id="ln-rate" type="number" step="0.1" placeholder="2" oninput="calcEmiFromForm()"></div>
-      <div><label class="fl">Rate Type</label>
-        <select class="fi" id="ln-ratetype" onchange="calcEmiFromForm()">
-          <option value="pm">% per Month</option>
-          <option value="pa" selected>% per Annum</option>
-          <option value="flat">Flat ₹/month</option>
-          <option value="0">Zero Interest</option>
-        </select>
+    <input type="hidden" id="ln-edit-id">
+
+    <!-- Step 1: Borrowed From -->
+    <label class="fl">Borrowed From *</label>
+    <select class="fi" id="ln-type" onchange="onLoanTypeChange()">
+      <option value="">— Select Source —</option>
+      <option value="bank">🏦 Banks / Institutions</option>
+      <option value="handloan">🤝 Hand Loan</option>
+    </select>
+
+    <!-- Common Fields (shown after type selected) -->
+    <div id="ln-common-fields" style="display:none">
+      <label class="fl" style="margin-top:8px">Lender Name *</label>
+      <input class="fi" id="ln-name" placeholder="e.g. SBI Bank, Ramesh Anna, Gold Loan">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px">
+        <div><label class="fl">Amount (₹) *</label><input class="fi fi-mono" id="ln-principal" type="number" placeholder="200000" oninput="calcEmiFromForm();calcHandLoanInterest()"></div>
+        <div><label class="fl">Date Borrowed *</label><input class="fi" id="ln-date" type="date"></div>
       </div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      <div><label class="fl">EMI / Month (₹)</label><input class="fi fi-mono" id="ln-emi" type="number" placeholder="Auto-calc" oninput="calcEmiFromForm()"></div>
-      <div><label class="fl">Term (months)</label><input class="fi fi-mono" id="ln-term" type="number" placeholder="12" oninput="calcEmiFromForm()"></div>
+
+    <!-- Bank / Institution fields -->
+    <div id="ln-bank-fields" style="display:none">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px">
+        <div><label class="fl">Interest Rate</label><input class="fi fi-mono" id="ln-rate" type="number" step="0.1" placeholder="2" oninput="calcEmiFromForm()"></div>
+        <div><label class="fl">Rate Type</label>
+          <select class="fi" id="ln-ratetype" onchange="calcEmiFromForm()">
+            <option value="pm">% per Month</option>
+            <option value="pa" selected>% per Annum</option>
+            <option value="flat">Flat ₹/month</option>
+            <option value="0">Zero Interest</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px">
+        <div><label class="fl">EMI / Month (₹)</label><input class="fi fi-mono" id="ln-emi" type="number" placeholder="Auto-calc" oninput="calcEmiFromForm()"></div>
+        <div><label class="fl">Term (months)</label><input class="fi fi-mono" id="ln-term" type="number" placeholder="12" oninput="calcEmiFromForm()"></div>
+      </div>
     </div>
-    <label class="fl">Notes (optional)</label>
-    <input class="fi" id="ln-notes" placeholder="ఉదా: 6 month loan, gold pledged, chit fund">
-    <div style="display:flex;gap:9px;margin-top:4px">
+
+    <!-- Hand Loan fields -->
+    <div id="ln-handloan-fields" style="display:none">
+      <label class="fl" style="margin-top:8px">Interest Rate (% per Annum) *</label>
+      <input class="fi fi-mono" id="ln-hl-rate" type="number" step="0.1" placeholder="e.g. 18" oninput="calcHandLoanInterest()">
+      <!-- Interest tracking — shown when editing an existing hand loan -->
+      <div id="ln-hl-track" style="display:none;background:rgba(232,93,122,0.06);border:1px solid rgba(232,93,122,0.2);border-radius:10px;padding:10px 12px;margin-top:8px">
+        <div style="font-size:11px;color:var(--tx3);margin-bottom:6px;font-weight:600">INTEREST TRACKING (Annual)</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div>
+            <label class="fl">Annual Interest (₹)</label>
+            <div class="fi fi-mono" id="ln-hl-total-int" style="opacity:0.75;color:var(--amb)">—</div>
+          </div>
+          <div>
+            <label class="fl">Interest Paid (₹)</label>
+            <input class="fi fi-mono" id="ln-hl-int-paid" type="number" placeholder="0" oninput="calcHandLoanInterest()">
+          </div>
+        </div>
+        <label class="fl" style="margin-top:6px">Interest Balance (₹)</label>
+        <div class="fi fi-mono" id="ln-hl-int-balance" style="opacity:0.75;color:var(--rose)">—</div>
+      </div>
+    </div>
+
+    <!-- Notes (shown after type selected) -->
+    <div id="ln-notes-section" style="display:none">
+      <label class="fl" style="margin-top:8px">Notes (optional)</label>
+      <input class="fi" id="ln-notes" placeholder="e.g. gold pledged, chit fund, 6-month term">
+    </div>
+
+    <div style="display:flex;gap:9px;margin-top:10px">
       <button class="btn ghost full" onclick="closeModal('add-loan')">Cancel</button>
-      <button class="btn rose full" onclick="saveLoan()">✓ Save Loan</button>
+      <button class="btn rose full" id="ln-save-btn" style="display:none" onclick="saveLoan()">✓ Save Loan</button>
     </div>
   </div>
 </div>
@@ -4588,12 +4632,18 @@ function openPlotByIndex(el) {
   } // end house-only construction
 
   // Misc Expenses section
-  var miscTypes = ['Registration','Borewell','BoreMotor','Brokerage','ElectricMeter'];
+  var miscTypes = [
+    {v:'Registration', l:'📝 Registration'},
+    {v:'Borewell',     l:'🕳️ Borewell'},
+    {v:'BoreMotor',    l:'⚡ BoreMotor'},
+    {v:'Brokerage',    l:'🤝 Brokerage'},
+    {v:'ElectricMeter',l:'💡 ElectricMeter'}
+  ];
   body += '<div class="seg-t" style="margin-top:12px">📋 Misc Expenses</div>';
   (plt.miscExpenses||[]).forEach(function(me, meIdx) {
     body += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:6px;align-items:center;margin-bottom:6px">'
       +'<select class="fi" onchange="updateMiscExpense('+pi+','+pli+','+meIdx+',\'type\',\'text\',this)" style="font-size:12px">'
-      +miscTypes.map(function(t){ return '<option value="'+t+'" '+(me.type===t?'selected':'')+'>'+t+'</option>'; }).join('')
+      +miscTypes.map(function(t){ return '<option value="'+t.v+'" '+(me.type===t.v?'selected':'')+'>'+t.l+'</option>'; }).join('')
       +'</select>'
       +'<input type="number" class="fi fi-mono" value="'+(me.amount||'')+'" placeholder="Amount" '
         +'onchange="updateMiscExpense('+pi+','+pli+','+meIdx+',\'amount\',\'num\',this)" style="font-size:12px">'
@@ -4623,19 +4673,14 @@ function openPlotByIndex(el) {
   var centRate = proj.totalCents > 0 ? (Number(proj.landCost||0) / proj.totalCents) : 0;
   var landCostForPlot = centRate * Number(plt.sizeInCents||0);
   var landBalance = landCostForPlot - landAdvanceForPlot;
-  var expLabel = plt.type === 'house' ? 'Total Construction' : 'Misc &amp; Other';
+  var investLabel = plt.type === 'house' ? '💰 Cost Basis (Land + Build)' : '💰 Cost Basis (Land + Misc)';
   body += '<div style="background:var(--s2);border:1px solid var(--bd);border-radius:9px;padding:10px 12px;margin-top:8px">'
-    +(totalConstruction > 0 || plt.type === 'house' ?
-      '<div style="display:flex;justify-content:space-between;margin-bottom:4px">'
-      +'<span style="font-size:12px;color:var(--tx2)">'+expLabel+'</span>'
-      +'<span style="font-family:JetBrains Mono;font-size:12px;font-weight:700;color:var(--amb)" id="hm-total">'+rup(totalConstruction)+'</span>'
-    +'</div>' : '')
     +'<div style="display:flex;justify-content:space-between;margin-bottom:4px">'
-      +'<span style="font-size:12px;color:var(--tx2)">Land Balance</span>'
+      +'<span style="font-size:12px;color:var(--tx2)">🏦 Land Balance (Remaining)</span>'
       +'<span style="font-family:JetBrains Mono;font-size:12px;font-weight:700;color:'+(landBalance<=0?'var(--rose)':'var(--sage)')+'">'+rup(landBalance)+'</span>'
     +'</div>'
     +'<div style="display:flex;justify-content:space-between">'
-      +'<span style="font-size:12px;color:var(--tx2)">Total Investment (incl. Land)</span>'
+      +'<span style="font-size:12px;color:var(--tx2)">'+investLabel+'</span>'
       +'<span id="hm-invest" style="font-family:JetBrains Mono;font-size:13px;font-weight:700;color:var(--rose)">'+rup(totalInvestment)+'</span>'
     +'</div>'
   +'</div>';
@@ -4679,8 +4724,6 @@ function openPlotByIndex(el) {
             +'style="background:none;border:none;color:var(--rose);cursor:pointer;font-size:16px;padding:4px">🗑️</button>'
         +'</div>';
       });
-      var ppTotal = pps.reduce(function(s,pp){ return s+Number(pp.amount||0); },0);
-      body += '<div style="font-size:12px;color:var(--tx2);text-align:right;margin-bottom:4px">Partial Payments Total: <b style="font-family:JetBrains Mono;color:var(--sage)">'+rup(ppTotal)+'</b></div>';
     } else {
       body += '<div style="font-size:12px;color:var(--tx3);margin-bottom:6px">No partial payments yet</div>';
     }
@@ -4696,11 +4739,9 @@ function openPlotByIndex(el) {
     // Plot type: SoldPrice - (PlotSize × DealCentRate). House type: SoldPrice - (LandCost + Construction)
     var _dealCentRate = proj.totalCents > 0 ? (Number(proj.landCost||0) / proj.totalCents) : 0;
     var _landCostForPlt = _dealCentRate * Number(plt.sizeInCents||0);
-    var plotProfit = plt.type === 'plot'
-      ? Number(plt.salePrice||0) - _landCostForPlt
-      : Number(plt.salePrice||0) - (_landCostForPlt + totalConstruction);
+    var plotProfit = Number(plt.salePrice||0) - (_landCostForPlt + totalConstruction);
     var profitColor = plotProfit >= 0 ? 'var(--sage)' : 'var(--rose)';
-    var profitLabel = plt.type === 'plot' ? 'Plot Profit (Sale − Land)' : 'Plot Profit';
+    var profitLabel = plt.type === 'plot' ? '📊 Profit (Sale − Land − Misc)' : '📊 Profit (Sale − Land − Build)';
     body += '<div style="background:rgba(122,200,90,0.05);border:1px solid rgba(122,200,90,0.2);border-radius:9px;padding:8px 12px;margin-top:8px;display:flex;justify-content:space-between;align-items:center">'
       +'<span style="font-size:12px;font-weight:700;color:var(--tx2)">'+profitLabel+'</span>'
       +'<span style="font-family:JetBrains Mono;font-size:13px;font-weight:700;color:'+profitColor+'">'+rup(plotProfit)+'</span>'
@@ -6459,48 +6500,134 @@ function switchFinTab(tab) {
 }
 
 // ── Save Loan ──
+// ── Open fresh Add Loan modal ──
+function openNewLoanModal() {
+  document.getElementById('ln-edit-id').value = '';
+  document.getElementById('ln-type').value = '';
+  document.getElementById('loan-modal-title').textContent = '🏦 Add Loan / Borrowing';
+  ['ln-name','ln-principal','ln-date','ln-rate','ln-hl-rate','ln-hl-int-paid','ln-notes','ln-emi','ln-term'].forEach(function(id){
+    var el=document.getElementById(id); if(el) el.value='';
+  });
+  onLoanTypeChange(); // resets visibility
+  openModal('add-loan');
+}
+
+// ── Loan type toggle ──
+function onLoanTypeChange() {
+  var type = document.getElementById('ln-type').value;
+  var show = type !== '';
+  document.getElementById('ln-common-fields').style.display = show ? 'block' : 'none';
+  document.getElementById('ln-bank-fields').style.display   = type === 'bank'     ? 'block' : 'none';
+  document.getElementById('ln-handloan-fields').style.display = type === 'handloan' ? 'block' : 'none';
+  document.getElementById('ln-notes-section').style.display = show ? 'block' : 'none';
+  document.getElementById('ln-save-btn').style.display      = show ? 'inline-flex' : 'none';
+  if (type === 'handloan') calcHandLoanInterest();
+}
+
+// ── HandLoan interest auto-calc ──
+function calcHandLoanInterest() {
+  var principal = Number(document.getElementById('ln-principal').value) || 0;
+  var rate      = Number(document.getElementById('ln-hl-rate').value) || 0;
+  var intPaid   = Number(document.getElementById('ln-hl-int-paid').value) || 0;
+  var track     = document.getElementById('ln-hl-track');
+  if (!track) return;
+  // Show tracking panel only when editing (edit-id is set)
+  var isEdit = !!(document.getElementById('ln-edit-id') && document.getElementById('ln-edit-id').value);
+  track.style.display = isEdit ? 'block' : 'none';
+  if (isEdit && principal > 0 && rate > 0) {
+    var totalInt = Math.round(principal * rate / 100);
+    var balance  = Math.max(totalInt - intPaid, 0);
+    document.getElementById('ln-hl-total-int').textContent   = rup(totalInt);
+    document.getElementById('ln-hl-int-balance').textContent = rup(balance);
+  }
+}
+
+// ── Open Edit Loan modal ──
+function openEditLoan(loanId) {
+  var loan = (state.loans||[]).find(function(l){ return l.id===loanId; });
+  if (!loan) return;
+  document.getElementById('loan-modal-title').textContent = '✏️ Edit Loan';
+  document.getElementById('ln-edit-id').value  = loan.id;
+  document.getElementById('ln-type').value     = loan.loanType || 'bank';
+  document.getElementById('ln-name').value     = loan.name || '';
+  document.getElementById('ln-principal').value = loan.principal || '';
+  document.getElementById('ln-date').value     = loan.date || '';
+  document.getElementById('ln-notes').value    = loan.notes || '';
+  if (loan.loanType === 'handloan') {
+    document.getElementById('ln-hl-rate').value     = loan.rate || '';
+    document.getElementById('ln-hl-int-paid').value = loan.interestPaid || '';
+  } else {
+    document.getElementById('ln-rate').value     = loan.rate || '';
+    document.getElementById('ln-ratetype').value = loan.rateType || 'pa';
+    document.getElementById('ln-emi').value      = loan.emi || '';
+    document.getElementById('ln-term').value     = loan.termMonths || '';
+  }
+  onLoanTypeChange();
+  calcHandLoanInterest();
+  openModal('add-loan');
+}
+
 function saveLoan() {
+  var editId    = document.getElementById('ln-edit-id').value;
+  var loanType  = document.getElementById('ln-type').value;
   var name      = document.getElementById('ln-name').value.trim();
   var principal = Number(document.getElementById('ln-principal').value) || 0;
   var date      = document.getElementById('ln-date').value;
-  var rate      = Number(document.getElementById('ln-rate').value) || 0;
-  var rateType  = document.getElementById('ln-ratetype').value;
   var notes     = document.getElementById('ln-notes').value.trim();
 
-  if (!name)      { toast('Lender పేరు enter చేయండి','err'); return; }
-  if (!principal) { toast('Principal amount enter చేయండి','err'); return; }
+  if (!loanType)  { toast('Borrowed From select చేయండి','err'); return; }
+  if (!name)      { toast('Lender name enter చేయండి','err'); return; }
+  if (!principal) { toast('Amount enter చేయండి','err'); return; }
   if (!date)      { toast('Date select చేయండి','err'); return; }
 
-  var emi  = Number(document.getElementById('ln-emi').value) || 0;
-  var term = Number(document.getElementById('ln-term').value) || 0;
+  var loan;
+  if (editId) {
+    // Edit existing
+    loan = (state.loans||[]).find(function(l){ return l.id===editId; });
+    if (!loan) { toast('Loan not found','err'); return; }
+  } else {
+    // New loan
+    loan = { id: 'ln_'+Date.now(), status: 'active', addedDate: today() };
+    if (!state.loans) state.loans = [];
+    state.loans.push(loan);
+  }
 
-  var loan = {
-    id:         'ln_'+Date.now(),
-    name:       name,
-    principal:  principal,
-    date:       date,
-    rate:       rate,
-    rateType:   rateType,
-    notes:      notes,
-    emi:        emi,
-    termMonths: term,
-    status:     'active',
-    addedDate:  today()
-  };
+  loan.loanType  = loanType;
+  loan.name      = name;
+  loan.principal = principal;
+  loan.date      = date;
+  loan.notes     = notes;
 
-  if (!state.loans) state.loans = [];
-  state.loans.push(loan);
+  if (loanType === 'bank') {
+    loan.rate      = Number(document.getElementById('ln-rate').value) || 0;
+    loan.rateType  = document.getElementById('ln-ratetype').value;
+    loan.emi       = Number(document.getElementById('ln-emi').value) || 0;
+    loan.termMonths= Number(document.getElementById('ln-term').value) || 0;
+  } else {
+    // handloan
+    loan.rate         = Number(document.getElementById('ln-hl-rate').value) || 0;
+    loan.rateType     = 'pa';
+    loan.interestPaid = Number(document.getElementById('ln-hl-int-paid').value) || 0;
+    loan.emi          = 0;
+    loan.termMonths   = 0;
+  }
+
   saveData();
   pushToSheet('Loans',
-    ['id','name','principal','date','rate','rateType','notes','status','addedDate','emi','termMonths'],
-    [loan.id, loan.name, loan.principal, loan.date, loan.rate, loan.rateType, loan.notes, loan.status, loan.addedDate, loan.emi, loan.termMonths]
+    ['id','loanType','name','principal','date','rate','rateType','notes','status','addedDate','emi','termMonths','interestPaid'],
+    [loan.id, loan.loanType, loan.name, loan.principal, loan.date, loan.rate, loan.rateType, loan.notes, loan.status, loan.addedDate, loan.emi, loan.termMonths, loan.interestPaid||0]
   );
 
   closeModal('add-loan');
-  ['ln-name','ln-principal','ln-date','ln-rate','ln-notes','ln-emi','ln-term'].forEach(function(id){
+  // Reset modal to fresh state
+  document.getElementById('ln-edit-id').value = '';
+  document.getElementById('ln-type').value = '';
+  document.getElementById('loan-modal-title').textContent = '🏦 Add Loan / Borrowing';
+  ['ln-name','ln-principal','ln-date','ln-rate','ln-hl-rate','ln-hl-int-paid','ln-notes','ln-emi','ln-term'].forEach(function(id){
     var el=document.getElementById(id); if(el) el.value='';
   });
-  toast('Loan saved ✓','ok');
+  onLoanTypeChange();
+  toast(editId ? 'Loan updated ✓' : 'Loan saved ✓', 'ok');
   renderLoanList();
 }
 
@@ -6674,9 +6801,10 @@ function renderLoanList() {
     var rateStr = loan.rateType==='0'?'Zero Interest':loan.rate+(loan.rateType==='pm'?'% p.m.':loan.rateType==='pa'?'% p.a.':'₹ flat/m');
     var bodyId='lbody_'+idx;
 
+    var loanIco = loan.loanType === 'handloan' ? '🤝' : '🏦';
     html += '<div class="loan-card fu">'
       +'<div class="loan-hdr" onclick="document.getElementById(\''+bodyId+'\').style.display=document.getElementById(\''+bodyId+'\').style.display===\'none\'?\'block\':\'none\'">'
-        +'<div class="loan-ico">🏦</div>'
+        +'<div class="loan-ico">'+loanIco+'</div>'
         +'<div style="flex:1;min-width:0">'
           +'<div class="loan-name">'+escH(loan.name)+'</div>'
           +'<div class="loan-meta">'+rup(loan.principal)+' · '+rateStr+' · '+loan.date+'</div>'
@@ -6696,6 +6824,21 @@ function renderLoanList() {
 
     if (loan.notes) {
       html += '<div style="font-size:12px;color:var(--tx3);margin-bottom:10px">📝 '+escH(loan.notes)+'</div>';
+    }
+
+    // HandLoan interest tracking panel
+    if (loan.loanType === 'handloan' && loan.rate) {
+      var annualInt  = Math.round(Number(loan.principal) * Number(loan.rate) / 100);
+      var intPaid    = Number(loan.interestPaid||0);
+      var intBalance = Math.max(annualInt - intPaid, 0);
+      html += '<div style="background:rgba(232,93,122,0.06);border:1px solid rgba(232,93,122,0.2);border-radius:9px;padding:9px 12px;margin-bottom:10px">'
+        +'<div style="font-size:10px;color:var(--tx3);font-weight:600;margin-bottom:6px">INTEREST TRACKING (Annual @ '+loan.rate+'%)</div>'
+        +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">'
+          +'<div><div style="font-size:11px;color:var(--tx3)">Annual Interest</div><div style="font-family:JetBrains Mono;font-size:13px;font-weight:700;color:var(--amb)">'+rup(annualInt)+'</div></div>'
+          +'<div><div style="font-size:11px;color:var(--tx3)">Interest Paid</div><div style="font-family:JetBrains Mono;font-size:13px;font-weight:700;color:var(--sage)">'+rup(intPaid)+'</div></div>'
+          +'<div><div style="font-size:11px;color:var(--tx3)">Interest Balance</div><div style="font-family:JetBrains Mono;font-size:13px;font-weight:700;color:var(--rose)">'+rup(intBalance)+'</div></div>'
+        +'</div>'
+      +'</div>';
     }
 
     // EMI Schedule (active loans with emi set)
@@ -6753,8 +6896,9 @@ function renderLoanList() {
 
     html += '<div style="display:flex;gap:8px;margin-top:10px">'
       +'<button class="btn teal sm" style="flex:1;font-size:12px" onclick="openAddPayment(\''+loan.id+'\')">+ Add Payment</button>'
-      +'<button class="btn ghost sm" style="font-size:12px" onclick="saveEmiAndRefresh()">💾 Save</button>'
-      +'<button class="btn ghost sm" style="font-size:12px" onclick="toggleLoanStatus(\''+loan.id+'\')">'+(loan.status==='closed'?'↩ Reopen':'✓ Close Loan')+'</button>'
+      +'<button class="btn amb sm" style="font-size:12px" onclick="openEditLoan(\''+loan.id+'\')">✏️ Edit</button>'
+      +'<button class="btn ghost sm" style="font-size:12px" onclick="toggleLoanStatus(\''+loan.id+'\')">'+(loan.status==='closed'?'↩ Reopen':'✓ Close')+'</button>'
+      +'<button class="btn ghost sm" style="font-size:12px" onclick="saveEmiAndRefresh()">💾</button>'
       +'<button class="btn ghost sm" style="color:var(--rose);font-size:12px" onclick="deleteLoan(\''+loan.id+'\')">🗑️</button>'
     +'</div>'
     +'</div>'  // loan-body
