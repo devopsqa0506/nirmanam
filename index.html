@@ -1501,7 +1501,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Noto Sans Telugu',sans-se
       <div><label class="fl">Rate Type</label>
         <select class="fi" id="ln-ratetype" onchange="calcEmiFromForm()">
           <option value="pm">% per Month</option>
-          <option value="pa">% per Annum</option>
+          <option value="pa" selected>% per Annum</option>
           <option value="flat">Flat ₹/month</option>
           <option value="0">Zero Interest</option>
         </select>
@@ -1509,7 +1509,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Noto Sans Telugu',sans-se
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
       <div><label class="fl">EMI / Month (₹)</label><input class="fi fi-mono" id="ln-emi" type="number" placeholder="Auto-calc" oninput="calcEmiFromForm()"></div>
-      <div><label class="fl">Term (months)</label><input class="fi fi-mono" id="ln-term" type="number" placeholder="12"></div>
+      <div><label class="fl">Term (months)</label><input class="fi fi-mono" id="ln-term" type="number" placeholder="12" oninput="calcEmiFromForm()"></div>
     </div>
     <label class="fl">Notes (optional)</label>
     <input class="fi" id="ln-notes" placeholder="ఉదా: 6 month loan, gold pledged, chit fund">
@@ -4549,7 +4549,7 @@ function openPlotByIndex(el) {
       +'<span style="margin-left:auto;font-size:10px;color:var(--tx3);background:var(--s3);padding:2px 7px;border-radius:5px">locked</span>'
     +'</div>';
   } else {
-    body += '<select class="fi" data-pi="'+pi+'" data-pli="'+pli+'" onchange="updatePlotField(this,\'type\',\'text\');openPlotByIndex(this.closest(\'.mover\').querySelector(\'[data-pi]\'))">'
+    body += '<select class="fi" data-pi="'+pi+'" data-pli="'+pli+'" onchange="updatePlotField(this,\'type\',\'text\');openPlotByIndex({dataset:{proj:\''+pi+'\',plot:\''+pli+'\'}})">'
       +'<option value="plot" '+(plt.type==='plot'?'selected':'')+'>📋 Plot (sell as-is)</option>'
       +'<option value="house" '+(plt.type==='house'?'selected':'')+'>🏗️ House (build &amp; sell)</option>'
     +'</select>';
@@ -4617,10 +4617,17 @@ function openPlotByIndex(el) {
   body += '<button class="btn ghost sm" style="width:100%;margin-bottom:4px" onclick="addOtherExpense('+pi+','+pli+')">+ Add Other Expense</button>';
 
   // Expense totals
+  var centRate = proj.totalCents > 0 ? (Number(proj.landCost||0) / proj.totalCents) : 0;
+  var landCostForPlot = centRate * Number(plt.sizeInCents||0);
+  var landBalance = landCostForPlot - landAdvanceForPlot;
   body += '<div style="background:var(--s2);border:1px solid var(--bd);border-radius:9px;padding:10px 12px;margin-top:8px">'
     +'<div style="display:flex;justify-content:space-between;margin-bottom:4px">'
       +'<span style="font-size:12px;color:var(--tx2)">Total Construction</span>'
       +'<span style="font-family:JetBrains Mono;font-size:12px;font-weight:700;color:var(--amb)" id="hm-total">'+rup(totalConstruction)+'</span>'
+    +'</div>'
+    +'<div style="display:flex;justify-content:space-between;margin-bottom:4px">'
+      +'<span style="font-size:12px;color:var(--tx2)">Land Balance</span>'
+      +'<span style="font-family:JetBrains Mono;font-size:12px;font-weight:700;color:'+(landBalance<=0?'var(--rose)':'var(--sage)')+'">'+rup(landBalance)+'</span>'
     +'</div>'
     +'<div style="display:flex;justify-content:space-between">'
       +'<span style="font-size:12px;color:var(--tx2)">Total Investment (incl. Land)</span>'
@@ -4631,7 +4638,7 @@ function openPlotByIndex(el) {
   // Sale / Status
   body += '<div class="seg-t" style="margin-top:14px">Sale / Status</div>'
     +'<label class="fl">Status</label>'
-    +'<select class="fi" data-pi="'+pi+'" data-pli="'+pli+'" onchange="updatePlotField(this,\'status\',\'text\');openPlotByIndex(this.closest(\'.mover\').querySelector(\'[data-pi]\'))">'
+    +'<select class="fi" data-pi="'+pi+'" data-pli="'+pli+'" onchange="updatePlotField(this,\'status\',\'text\');openPlotByIndex({dataset:{proj:\''+pi+'\',plot:\''+pli+'\'}})">'
       +'<option value="planned" '+(plt.status==='planned'?'selected':'')+'>📋 Planned</option>'
       +'<option value="sold" '+(plt.status==='sold'?'selected':'')+'>✅ Sold</option>'
     +'</select>';
@@ -4643,7 +4650,7 @@ function openPlotByIndex(el) {
       +'data-pi="'+pi+'" data-pli="'+pli+'" onchange="updatePlotField(this,\'salePrice\',\'num\')">'
       +'<label class="fl" style="margin-top:9px">Advance Received (₹)</label>'
       +'<input type="number" class="fi fi-mono" value="'+(plt.advanceReceived||'')+'" placeholder="Token / advance amount" '
-      +'data-pi="'+pi+'" data-pli="'+pli+'" onchange="updatePlotField(this,\'advanceReceived\',\'num\')">'
+      +'data-pi="'+pi+'" data-pli="'+pli+'" onchange="updatePlotField(this,\'advanceReceived\',\'num\')" oninput="recalcPaymentTotal('+pi+','+pli+',this.value)">'
       +'<label class="fl" style="margin-top:9px">Buyer Name</label>'
       +'<input type="text" class="fi" value="'+escH(plt.buyer||'')+'" placeholder="Buyer పేరు" '
       +'data-pi="'+pi+'" data-pli="'+pli+'" onchange="updatePlotField(this,\'buyer\',\'text\')">';
@@ -4677,7 +4684,7 @@ function openPlotByIndex(el) {
     var advTotal = Number(plt.advanceReceived||0) + (plt.partialPayments||[]).reduce(function(s,pp){ return s+Number(pp.amount||0); },0);
     body += '<div style="background:rgba(122,200,90,0.08);border:1px solid rgba(122,200,90,0.25);border-radius:9px;padding:8px 12px;margin-top:4px;display:flex;justify-content:space-between;align-items:center">'
       +'<span style="font-size:12px;font-weight:700;color:var(--tx1)">Total Amount Received</span>'
-      +'<span style="font-family:JetBrains Mono;font-size:13px;font-weight:700;color:var(--sage)">'+rup(advTotal)+'</span>'
+      +'<span id="pp-adv-total" style="font-family:JetBrains Mono;font-size:13px;font-weight:700;color:var(--sage)">'+rup(advTotal)+'</span>'
     +'</div>';
 
     // Plot Profit
@@ -4761,6 +4768,15 @@ function updatePartialPayment(el, pi, pli, ppIdx, field, type) {
   if (!plt.partialPayments || !plt.partialPayments[ppIdx]) return;
   plt.partialPayments[ppIdx][field] = type==='num' ? (Number(el.value)||0) : el.value;
   saveData();
+  if (field === 'amount') recalcPaymentTotal(pi, pli, null);
+}
+
+function recalcPaymentTotal(pi, pli, advOverride) {
+  var plt = state.projects[pi].plots[pli];
+  var adv = advOverride !== null && advOverride !== undefined ? (Number(advOverride)||0) : Number(plt.advanceReceived||0);
+  var ppTotal = (plt.partialPayments||[]).reduce(function(s,pp){ return s+Number(pp.amount||0); },0);
+  var el = document.getElementById('pp-adv-total');
+  if (el) el.textContent = rup(adv + ppTotal);
 }
 
 function deletePartialPayment(pi, pli, ppIdx) {
@@ -6337,13 +6353,27 @@ function calcEmiFromForm() {
   var principal = Number(document.getElementById('ln-principal').value)||0;
   var rate      = Number(document.getElementById('ln-rate').value)||0;
   var rateType  = document.getElementById('ln-ratetype').value;
+  var term      = Number(document.getElementById('ln-term').value)||0;
   var emiEl     = document.getElementById('ln-emi');
-  if (!emiEl) return;
-  if (!principal || !rate || rateType==='0') { return; }
-  var monthly = rateType==='pm' ? principal*rate/100
-              : rateType==='pa' ? Math.round(principal*rate/100/12)
-              : rateType==='flat' ? rate : 0;
-  if (monthly > 0) emiEl.value = Math.round(monthly);
+  if (!emiEl || !principal) return;
+  if (rateType==='0') {
+    if (term > 0) emiEl.value = Math.round(principal / term);
+    return;
+  }
+  if (rateType==='flat') {
+    if (rate > 0) emiEl.value = Math.round(rate);
+    return;
+  }
+  if (!rate) return;
+  var r = rateType==='pm' ? rate/100 : rate/100/12;
+  if (term > 0) {
+    // Standard EMI: P * r * (1+r)^n / ((1+r)^n - 1)
+    var pow = Math.pow(1+r, term);
+    emiEl.value = Math.round(principal * r * pow / (pow - 1));
+  } else {
+    // Interest-only (no term)
+    emiEl.value = Math.round(principal * r);
+  }
 }
 
 // ── Update EMI Schedule Entry ──
@@ -6388,7 +6418,7 @@ function toggleEmiPaid(loanId, origDate) {
     }
   }
   saveData();
-  renderLoanList();
+  // Do NOT call renderLoanList() — card stays open; use Save button to refresh
 }
 
 // ── Tab switcher ──
@@ -6578,6 +6608,11 @@ function toggleLoanStatus(loanId) {
 function renderLoanList() {
   var el = document.getElementById('loan-list');
   if (!el) return;
+  // Preserve expanded cards before re-render
+  var openBodies = [];
+  (el.querySelectorAll('[id^="lbody_"]')||[]).forEach(function(b){
+    if (b.style.display !== 'none') openBodies.push(b.id);
+  });
   var loans = state.loans||[];
 
   // Summary totals
@@ -6691,6 +6726,7 @@ function renderLoanList() {
 
     html += '<div style="display:flex;gap:8px;margin-top:10px">'
       +'<button class="btn teal sm" style="flex:1;font-size:12px" onclick="openAddPayment(\''+loan.id+'\')">+ Add Payment</button>'
+      +'<button class="btn ghost sm" style="font-size:12px" onclick="saveEmiAndRefresh()">💾 Save</button>'
       +'<button class="btn ghost sm" style="font-size:12px" onclick="toggleLoanStatus(\''+loan.id+'\')">'+(loan.status==='closed'?'↩ Reopen':'✓ Close Loan')+'</button>'
       +'<button class="btn ghost sm" style="color:var(--rose);font-size:12px" onclick="deleteLoan(\''+loan.id+'\')">🗑️</button>'
     +'</div>'
@@ -6699,6 +6735,14 @@ function renderLoanList() {
   });
 
   el.innerHTML = html;
+  // Restore expanded cards
+  openBodies.forEach(function(id){ var b=document.getElementById(id); if(b) b.style.display='block'; });
+}
+
+function saveEmiAndRefresh() {
+  saveData();
+  renderLoanList();
+  toast('EMI saved ✓', 'ok');
 }
 
 // ── Save Project Income ──
