@@ -3233,12 +3233,18 @@ async function handlePhoto(e, source) {
       { inlineData: { mimeType: file.type, data: b64 } },
       { text: DOC_PROMPT }
     ];
-
+    var controller = new AbortController();
+    var timeout = setTimeout(() => controller.abort(), 180000); // 3 min timeout
     var res = await fetch(
       'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + activePhotoKey,
       { method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ contents: [{ role:'user', parts:parts }] }) }
+        body: JSON.stringify({ contents: [{ role:'user', parts:parts }], generationConfig:{maxOutputTokens:2000,temperature:0.1} }),
+        signal: controller.signal }
     );
+    clearTimeout(timeout);
+    if (!res.ok) {
+      throw new Error('API request failed: ' + res.status);
+    }
 
     showProc('Processing results...\nExtracting fields...');
     var data = await res.json();
