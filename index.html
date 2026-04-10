@@ -5451,7 +5451,7 @@ function updateAdvancesReceivedTotal() {
   projects.forEach(function(proj) {
     var landPaid = (state.landPayments||[]).filter(function(p){ return p.projId===proj.id; })
                    .reduce(function(s,p){ return s+Number(p.amount||0); },0);
-    var centRate = proj.totalCents > 0 ? (landPaid / proj.totalCents) : 0;
+    var _dealCentRate = proj.totalCents > 0 ? (Number(proj.landCost||0) / proj.totalCents) : 0;
     
     (proj.plots||[]).forEach(function(plt) {
       // Construction & Misc for ALL plots
@@ -5467,13 +5467,15 @@ function updateAdvancesReceivedTotal() {
         var salePrice = Number(plt.salePrice||0);
         totalExpRecv += Math.max(salePrice - received, 0);
         
-        var landCost = centRate * Number(plt.sizeInCents||0);
-        var miscCost = (plt.miscExpenses||[]).reduce(function(s,e){ return s+Number(e.amount||0); },0);
-        var otherCost = (plt.otherExpenses||[]).reduce(function(s,e){ return s+Number(e.amount||0); },0);
-        var costBasis = plt.type === 'plot'
-          ? landCost + miscCost + otherCost
-          : landCost + (plt.constructionExpenses||[]).reduce(function(s,e){ return s+Number(e.amount||0); },0) + miscCost + otherCost;
-        totalProft += (salePrice - costBasis);
+        // SAME LOGIC AS PLOT PROFIT DISPLAY (lines 5022-5030)
+        var _landCostForPlt = _dealCentRate * Number(plt.sizeInCents||0);
+        var _miscForPlt = (plt.miscExpenses||[]).reduce(function(s,e){ return s+Number(e.amount||0); },0);
+        var _otherForPlt = (plt.otherExpenses||[]).reduce(function(s,e){ return s+Number(e.amount||0); },0);
+        var _costBasis = plt.type === 'plot'
+          ? _landCostForPlt + _miscForPlt + _otherForPlt
+          : _landCostForPlt + constExp + _miscForPlt + _otherForPlt;
+        var plotProfit = salePrice - _costBasis;
+        totalProft += plotProfit;
       }
     });
   });
