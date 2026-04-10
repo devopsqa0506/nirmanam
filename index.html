@@ -2536,7 +2536,13 @@ function mergeSheetData(sheetData) {
     if (!state.loanPayments) state.loanPayments=[];
     var lpIds = new Set(state.loanPayments.map(function(p){ return p.id; }));
     lpRows.forEach(function(r){ var o={}; lpHdrs.forEach(function(h,i){ o[h]=r[i]; });
-      if (o.id && !lpIds.has(o.id)) { o.amount=Number(o.amount)||0; o.interestPart=Number(o.interestPart)||0; o.principalPart=Number(o.principalPart)||0; state.loanPayments.push(o); }
+      if (o.id && !lpIds.has(o.id)) { 
+        o.amount=Number(o.amount)||0; 
+        // Support both old and new schema
+        o.interestAmount=Number(o.interestAmount||o.interestPart)||0; 
+        o.principalAmount=Number(o.principalAmount||o.principalPart)||0; 
+        state.loanPayments.push(o); 
+      }
     });
   }
   // ── Merge ProjectIncome ──
@@ -2566,6 +2572,10 @@ function mergeSheetData(sheetData) {
       if (o.id && !peIds.has(o.id)) { o.amount=Number(o.amount)||0; state.projExpenses.push(o); }
     });
   }
+  
+  // Render finance screens after sync
+  renderLoanList();
+  renderPL();
 }
 
 function syncNow() { toast('Syncing...','info'); syncFromSheet(); }
