@@ -6765,7 +6765,7 @@ function toggleEmiPaid(loanId, origDate) {
     }
   }
   saveData();
-  // Do NOT call renderLoanList() — card stays open; use Save button to refresh
+  renderLoanList();
 }
 
 // ── Tab switcher ──
