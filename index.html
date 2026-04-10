@@ -5069,7 +5069,7 @@ function openPlotByIndex(el) {
     var _otherForPlt = (plt.otherExpenses||[]).reduce(function(s,e){ return s+Number(e.amount||0); },0);
     var _costBasis = plt.type === 'plot'
       ? _landCostForPlt + _miscForPlt + _otherForPlt
-      : _landCostForPlt + totalConstruction + _miscForPlt + _otherForPlt;
+      : _landCostForPlt + constTotal + _miscForPlt + _otherForPlt;
     var plotProfit = salePrice - _costBasis;
     var profitColor = plotProfit >= 0 ? 'var(--sage)' : 'var(--rose)';
     var profitLabel = plt.type === 'plot' ? '📊 Profit (Sale − Land − Misc)' : '📊 Profit (Sale − Land − Build)';
@@ -7353,12 +7353,12 @@ function renderLoanList() {
     }
   });
 
-  var bs=document.getElementById('fs-borrowed');        if(bs) bs.textContent=rup(totalBorrowed);
-  var os=document.getElementById('fs-outstanding');     if(os) os.textContent=rup(totalOutstanding);
-  var is=document.getElementById('fs-interest');        if(is) is.textContent=rup(totalIntPaid);
-  var ps=document.getElementById('fs-principal');       if(ps) ps.textContent=rup(totalPrinPaid);
-  var ia=document.getElementById('fs-int-accrued');     if(ia) ia.textContent=rup(totalIntAccrued);
-  var ib=document.getElementById('fs-int-balance');     if(ib) ib.textContent=rup(totalIntBalance);
+  var bs=document.getElementById('fs-borrowed');        if(bs) bs.innerHTML=rup(totalBorrowed)+' <span style="font-size:12px;font-weight:600;color:var(--sky)">('+shortAmt(totalBorrowed)+')</span>';
+  var os=document.getElementById('fs-outstanding');     if(os) os.innerHTML=rup(totalOutstanding)+' <span style="font-size:12px;font-weight:600;color:var(--rose)">('+shortAmt(totalOutstanding)+')</span>';
+  var is=document.getElementById('fs-interest');        if(is) is.innerHTML=rup(totalIntPaid)+' <span style="font-size:12px;font-weight:600;color:var(--amb)">('+shortAmt(totalIntPaid)+')</span>';
+  var ps=document.getElementById('fs-principal');       if(ps) ps.innerHTML=rup(totalPrinPaid)+' <span style="font-size:12px;font-weight:600;color:var(--teal)">('+shortAmt(totalPrinPaid)+')</span>';
+  var ia=document.getElementById('fs-int-accrued');     if(ia) ia.innerHTML=rup(totalIntAccrued)+' <span style="font-size:12px;font-weight:600;color:var(--sage)">('+shortAmt(totalIntAccrued)+')</span>';
+  var ib=document.getElementById('fs-int-balance');     if(ib) ib.innerHTML=rup(totalIntBalance)+' <span style="font-size:12px;font-weight:600;color:var(--sky)">('+shortAmt(totalIntBalance)+')</span>';
 
   if (!loans.length) {
     el.innerHTML='<div class="empty"><div class="ei">🏦</div><div class="et">Loans లేవు</div><div class="es">Bank loans, gold loans, hand loans అన్నీ ఇక్కడ track చేయండి</div></div>';
@@ -7381,20 +7381,20 @@ function renderLoanList() {
         +'<div class="loan-ico">'+loanIco+'</div>'
         +'<div style="flex:1;min-width:0">'
           +'<div class="loan-name">'+escH(loan.name)+'</div>'
-          +'<div class="loan-meta">'+rup(loan.principal)+' · '+rateStr+' · '+loan.date+'</div>'
+          +'<div class="loan-meta">'+rup(loan.principal)+' <span style="font-size:11px;color:var(--amb)">('+shortAmt(loan.principal)+')</span> · '+rateStr+' · '+loan.date+'</div>'
         +'</div>'
         +'<span class="loan-status-pill '+(loan.status==='closed'?'closed':'active')+'">'+(loan.status==='closed'?'Closed':'Active')+'</span>'
       +'</div>'
       +'<div class="loan-body" id="'+bodyId+'" style="display:none">'
         +'<div class="loan-stats">'
-          +'<div class="ls-box"><div class="ls-lbl">Principal</div><div class="ls-val amb">'+rup(loan.principal)+'</div></div>'
-          +'<div class="ls-box"><div class="ls-lbl">Outstanding</div><div class="ls-val rose">'+rup(outstanding)+'</div></div>'
-          +'<div class="ls-box"><div class="ls-lbl">Total Paid</div><div class="ls-val teal">'+rup(paidTotal)+'</div></div>'
-          +'<div class="ls-box"><div class="ls-lbl">Interest Paid</div><div class="ls-val sky">'+rup(paidInt)+'</div></div>'
-          +'<div class="ls-box"><div class="ls-lbl">Principal Paid</div><div class="ls-val sage">'+rup(paidPrin)+'</div></div>'
+          +'<div class="ls-box"><div class="ls-lbl">Principal</div><div class="ls-val amb">'+rup(loan.principal)+' <span style="font-size:10px;color:var(--sky)">('+shortAmt(loan.principal)+')</span></div></div>'
+          +'<div class="ls-box"><div class="ls-lbl">Outstanding</div><div class="ls-val rose">'+rup(outstanding)+' <span style="font-size:10px;color:var(--amb)">('+shortAmt(outstanding)+')</span></div></div>'
+          +'<div class="ls-box"><div class="ls-lbl">Total Paid</div><div class="ls-val teal">'+rup(paidTotal)+' <span style="font-size:10px;color:var(--sage)">('+shortAmt(paidTotal)+')</span></div></div>'
+          +'<div class="ls-box"><div class="ls-lbl">Interest Paid</div><div class="ls-val sky">'+rup(paidInt)+' <span style="font-size:10px;color:var(--teal)">('+shortAmt(paidInt)+')</span></div></div>'
+          +'<div class="ls-box"><div class="ls-lbl">Principal Paid</div><div class="ls-val sage">'+rup(paidPrin)+' <span style="font-size:10px;color:var(--rose)">('+shortAmt(paidPrin)+')</span></div></div>'
           +'<div class="ls-box"><div class="ls-lbl">Payments</div><div class="ls-val">'+pmts.length+'</div></div>'
         +'</div>'
-        +(loan.emi ? '<div style="background:rgba(58,232,200,0.08);border:1px solid rgba(58,232,200,0.3);border-radius:9px;padding:7px 12px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center"><span style="font-size:12px;color:var(--tx2)">EMI / Month</span><span style="font-family:JetBrains Mono;font-size:14px;font-weight:700;color:var(--teal)">'+rup(loan.emi)+'</span></div>' : '');
+        +(loan.emi ? '<div style="background:rgba(58,232,200,0.08);border:1px solid rgba(58,232,200,0.3);border-radius:9px;padding:7px 12px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center"><span style="font-size:12px;color:var(--tx2)">EMI / Month</span><span style="font-family:JetBrains Mono;font-size:14px;font-weight:700;color:var(--teal)">'+rup(loan.emi)+' <span style="font-size:11px;color:var(--amb)">('+shortAmt(loan.emi)+')</span></span></div>' : '');
 
     if (loan.notes) {
       html += '<div style="font-size:12px;color:var(--tx3);margin-bottom:10px">📝 '+escH(loan.notes)+'</div>';
@@ -7891,26 +7891,26 @@ function renderPL() {
 
     var landLine = landForCalc > 0
       ? (landPaid > 0 && landPaid < landCostTotal
-        ? '<div class="pl-row"><span class="pl-lbl">🌾 Land Paid <span style="font-size:10px;color:var(--tx3)">('+rup(landPaid)+' of '+rup(landCostTotal)+')</span></span><span class="pl-val" style="color:var(--amb)">'+rup(landPaid)+'</span></div>'
-        : '<div class="pl-row"><span class="pl-lbl">🌾 Land Cost</span><span class="pl-val" style="color:var(--amb)">'+rup(landForCalc)+'</span></div>')
+        ? '<div class="pl-row"><span class="pl-lbl">🌾 Land Paid <span style="font-size:10px;color:var(--tx3)">('+rup(landPaid)+' of '+rup(landCostTotal)+')</span></span><span class="pl-val" style="color:var(--amb)">'+rup(landPaid)+' <span style="font-size:10px;color:var(--sky)">('+shortAmt(landPaid)+')</span></span></div>'
+        : '<div class="pl-row"><span class="pl-lbl">🌾 Land Cost</span><span class="pl-val" style="color:var(--amb)">'+rup(landForCalc)+' <span style="font-size:10px;color:var(--teal)">('+shortAmt(landForCalc)+')</span></span></div>')
       : '';
 
     html += '<div class="pl-card fu">'
       +'<div class="pl-proj-name">🏘️ '+escH(proj.name) + roiBadge +'</div>'
       + landLine
-      +(projConstCost ? '<div class="pl-row"><span class="pl-lbl">🏗️ Construction</span><span class="pl-val" style="color:var(--sky)">'+rup(projConstCost)+'</span></div>' : '')
-      +(projMiscOther ? '<div class="pl-row"><span class="pl-lbl">📋 Misc &amp; Other</span><span class="pl-val" style="color:var(--teal)">'+rup(projMiscOther)+'</span></div>' : '')
-      +(manualExp ? '<div class="pl-row"><span class="pl-lbl">📤 Overhead / Admin</span><span class="pl-val" style="color:var(--rose)">'+rup(manualExp)+'</span></div>' : '')
-      +'<div class="pl-row"><span class="pl-lbl" style="font-weight:700">Total Cost Incurred</span><span class="pl-val" style="color:var(--rose)">'+rup(costIncurred)+'</span></div>'
+      +(projConstCost ? '<div class="pl-row"><span class="pl-lbl">🏗️ Construction</span><span class="pl-val" style="color:var(--sky)">'+rup(projConstCost)+' <span style="font-size:10px;color:var(--amb)">('+shortAmt(projConstCost)+')</span></span></div>' : '')
+      +(projMiscOther ? '<div class="pl-row"><span class="pl-lbl">📋 Misc &amp; Other</span><span class="pl-val" style="color:var(--teal)">'+rup(projMiscOther)+' <span style="font-size:10px;color:var(--rose)">('+shortAmt(projMiscOther)+')</span></span></div>' : '')
+      +(manualExp ? '<div class="pl-row"><span class="pl-lbl">📤 Overhead / Admin</span><span class="pl-val" style="color:var(--rose)">'+rup(manualExp)+' <span style="font-size:10px;color:var(--sage)">('+shortAmt(manualExp)+')</span></span></div>' : '')
+      +'<div class="pl-row"><span class="pl-lbl" style="font-weight:700">Total Cost Incurred</span><span class="pl-val" style="color:var(--rose)">'+rup(costIncurred)+' <span style="font-size:10px;color:var(--sky)">('+shortAmt(costIncurred)+')</span></span></div>'
       +'<div class="pl-row"><span class="pl-lbl" style="color:var(--tx3)">Plots: '+plots.length+' total · '+soldCount+' sold · '+wipCount+' unsold</span></div>';
 
     if (soldRevenue > 0) {
       html += '<div style="border-top:1px solid var(--bd);margin:6px 0;padding-top:6px">'
-        +'<div class="pl-row"><span class="pl-lbl">💰 Revenue (Sold plots)</span><span class="pl-val" style="color:var(--sage)">'+rup(soldRevenue)+'</span></div>'
-        +'<div class="pl-row"><span class="pl-lbl">✅ Received So Far</span><span class="pl-val" style="color:var(--teal)">'+rup(soldReceived)+'</span></div>'
-        +(soldReceived < soldRevenue ? '<div class="pl-row"><span class="pl-lbl" style="color:var(--tx3)">Pending Collection</span><span class="pl-val" style="color:var(--amb)">'+rup(soldRevenue-soldReceived)+'</span></div>' : '')
-        +'<div class="pl-row"><span class="pl-lbl">📊 COGS (Sold plots cost)</span><span class="pl-val" style="color:var(--rose)">'+rup(soldCOGS)+'</span></div>'
-        +'<div class="pl-row total" style="background:var(--s3);border-radius:8px;padding:8px 10px;margin-top:4px"><span class="pl-lbl" style="font-size:14px">Gross Profit</span><span class="pl-val" style="font-size:15px;color:'+gpColor+'">'+(grossProfit>=0?'+':'')+rup(grossProfit)+'</span></div>'
+        +'<div class="pl-row"><span class="pl-lbl">💰 Revenue (Sold plots)</span><span class="pl-val" style="color:var(--sage)">'+rup(soldRevenue)+' <span style="font-size:10px;color:var(--amb)">('+shortAmt(soldRevenue)+')</span></span></div>'
+        +'<div class="pl-row"><span class="pl-lbl">✅ Received So Far</span><span class="pl-val" style="color:var(--teal)">'+rup(soldReceived)+' <span style="font-size:10px;color:var(--rose)">('+shortAmt(soldReceived)+')</span></span></div>'
+        +(soldReceived < soldRevenue ? '<div class="pl-row"><span class="pl-lbl" style="color:var(--tx3)">Pending Collection</span><span class="pl-val" style="color:var(--amb)">'+rup(soldRevenue-soldReceived)+' <span style="font-size:10px;color:var(--sky)">('+shortAmt(soldRevenue-soldReceived)+')</span></span></div>' : '')
+        +'<div class="pl-row"><span class="pl-lbl">📊 COGS (Sold plots cost)</span><span class="pl-val" style="color:var(--rose)">'+rup(soldCOGS)+' <span style="font-size:10px;color:var(--teal)">('+shortAmt(soldCOGS)+')</span></span></div>'
+        +'<div class="pl-row total" style="background:var(--s3);border-radius:8px;padding:8px 10px;margin-top:4px"><span class="pl-lbl" style="font-size:14px">Gross Profit</span><span class="pl-val" style="font-size:15px;color:'+gpColor+'">'+(grossProfit>=0?'+':'')+rup(grossProfit)+' <span style="font-size:11px;color:var(--sage)">('+shortAmt(grossProfit)+')</span></span></div>'
       +'</div>';
     } else {
       html += '<div style="background:rgba(232,184,74,0.06);border:1px solid rgba(232,184,74,0.2);border-radius:9px;padding:8px 12px;margin-top:8px;text-align:center">'
@@ -7930,16 +7930,16 @@ function renderPL() {
     elOverall.innerHTML = '<div style="background:linear-gradient(135deg,rgba(232,184,74,0.08),rgba(58,232,200,0.05));border:1px solid rgba(232,184,74,0.3);border-radius:13px;padding:14px;margin-bottom:4px">'
       +'<div style="font-size:13px;font-weight:700;color:var(--amb);margin-bottom:10px">📊 Company P&amp;L — All Projects</div>'
       +'<div class="fin-summary">'
-        +'<div class="fsum-box"><div class="fsum-lbl">Total Borrowed</div><div class="fsum-val" style="color:var(--amb)">'+rup(totalBorrowed)+'</div></div>'
-        +'<div class="fsum-box"><div class="fsum-lbl">Outstanding Debt</div><div class="fsum-val" style="color:var(--rose)">'+rup(totalOutstanding)+'</div></div>'
-        +'<div class="fsum-box"><div class="fsum-lbl">Interest Paid</div><div class="fsum-val" style="color:var(--sky)">'+rup(totalInterestPaid)+'</div></div>'
-        +'<div class="fsum-box"><div class="fsum-lbl">Total Cost Incurred</div><div class="fsum-val" style="color:var(--rose)">'+rup(allCostIncurred)+'</div></div>'
+        +'<div class="fsum-box"><div class="fsum-lbl">Total Borrowed</div><div class="fsum-val" style="color:var(--amb)">'+rup(totalBorrowed)+' <span style="font-size:11px;font-weight:600;color:var(--sky)">('+shortAmt(totalBorrowed)+')</span></div></div>'
+        +'<div class="fsum-box"><div class="fsum-lbl">Outstanding Debt</div><div class="fsum-val" style="color:var(--rose)">'+rup(totalOutstanding)+' <span style="font-size:11px;font-weight:600;color:var(--amb)">('+shortAmt(totalOutstanding)+')</span></div></div>'
+        +'<div class="fsum-box"><div class="fsum-lbl">Interest Paid</div><div class="fsum-val" style="color:var(--sky)">'+rup(totalInterestPaid)+' <span style="font-size:11px;font-weight:600;color:var(--teal)">('+shortAmt(totalInterestPaid)+')</span></div></div>'
+        +'<div class="fsum-box"><div class="fsum-lbl">Total Cost Incurred</div><div class="fsum-val" style="color:var(--rose)">'+rup(allCostIncurred)+' <span style="font-size:11px;font-weight:600;color:var(--sage)">('+shortAmt(allCostIncurred)+')</span></div></div>'
       +'</div>'
       +(hasSales ? '<div class="fin-summary" style="margin-top:8px">'
-        +'<div class="fsum-box"><div class="fsum-lbl">Revenue (Sold)</div><div class="fsum-val" style="color:var(--sage)">'+rup(allRevenue)+'</div></div>'
-        +'<div class="fsum-box"><div class="fsum-lbl">Received So Far</div><div class="fsum-val" style="color:var(--teal)">'+rup(allReceived)+'</div></div>'
-        +'<div class="fsum-box"><div class="fsum-lbl">Gross Profit</div><div class="fsum-val" style="color:'+ogColor+'">'+(overallGross>=0?'+':'')+rup(overallGross)+'</div></div>'
-        +'<div class="fsum-box"><div class="fsum-lbl" style="font-weight:700">Net Profit</div><div class="fsum-val" style="color:'+onColor+';font-size:18px">'+(overallNet>=0?'+':'')+rup(overallNet)+'</div></div>'
+        +'<div class="fsum-box"><div class="fsum-lbl">Revenue (Sold)</div><div class="fsum-val" style="color:var(--sage)">'+rup(allRevenue)+' <span style="font-size:11px;font-weight:600;color:var(--amb)">('+shortAmt(allRevenue)+')</span></div></div>'
+        +'<div class="fsum-box"><div class="fsum-lbl">Received So Far</div><div class="fsum-val" style="color:var(--teal)">'+rup(allReceived)+' <span style="font-size:11px;font-weight:600;color:var(--rose)">('+shortAmt(allReceived)+')</span></div></div>'
+        +'<div class="fsum-box"><div class="fsum-lbl">Gross Profit</div><div class="fsum-val" style="color:'+ogColor+'">'+(overallGross>=0?'+':'')+rup(overallGross)+' <span style="font-size:11px;font-weight:600;color:var(--sky)">('+shortAmt(overallGross)+')</span></div></div>'
+        +'<div class="fsum-box"><div class="fsum-lbl" style="font-weight:700">Net Profit</div><div class="fsum-val" style="color:'+onColor+';font-size:18px">'+(overallNet>=0?'+':'')+rup(overallNet)+' <span style="font-size:12px;font-weight:600;color:var(--amb)">('+shortAmt(overallNet)+')</span></div></div>'
       +'</div>' : '<div style="padding:8px 0;font-size:12px;color:var(--tx3);text-align:center">Mark plots as Sold to see Revenue &amp; Profit</div>')
     +'</div>';
   }
