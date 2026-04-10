@@ -4724,10 +4724,7 @@ function saveProject() {
   clearLandPaymentRows();
   clearPlotRows();
   toast(editId ? 'Venture updated ✓' : 'Venture saved!', 'ok');
-  pushToSheet('Projects',
-    ['id','name','projType','landCost','totalCents','pricePerCent','status','location','date'],
-    [proj.id,proj.name,proj.projType,proj.landCost,proj.totalCents,proj.pricePerCent,proj.status,proj.location,proj.date]
-  );
+  syncProjectPlots(proj.id);
 }
 
 function openEditProject(projId) {
@@ -4867,18 +4864,36 @@ function addPlotInline(pidx) {
 
 function deleteProjByIndex(el) {
   var idx = Number(el.dataset.proj);
-  if (!confirm('Delete this project?')) return;
   var proj = state.projects[idx];
-  var projId = proj ? proj.id : null;
-  state.projects.splice(idx, 1);
-  saveData(); renderProjects(); toast('Project deleted', 'ok');
-  // Delete from sheet so it doesnt come back on sync
-  if (projId && cfg.scriptUrl && cfg.sheetId) {
+  if (!proj || !confirm('Delete venture "'+proj.name+'"? This will delete all plots, expenses, and payments.')) return;
+  
+  var projId = proj.id;
+  
+  // Delete from sheets
+  if (cfg.scriptUrl && cfg.sheetId) {
     fetch(cfg.scriptUrl, {
-      method:'POST', mode:'no-cors',
+      method:'POST',
       body: JSON.stringify({action:'deleteRow', sheetId:cfg.sheetId, sheetName:'Projects', matchCol:'id', matchVal:projId})
-    });
+    }).catch(function(){});
+    
+    fetch(cfg.scriptUrl, {
+      method:'POST',
+      body: JSON.stringify({action:'deleteRow', sheetId:cfg.sheetId, sheetName:'ProjectExpenses', matchCol:'projId', matchVal:projId})
+    }).catch(function(){});
+    
+    fetch(cfg.scriptUrl, {
+      method:'POST',
+      body: JSON.stringify({action:'deleteRow', sheetId:cfg.sheetId, sheetName:'LandPayments', matchCol:'projId', matchVal:projId})
+    }).catch(function(){});
   }
+  
+  // Delete from local state
+  state.projects.splice(idx, 1);
+  state.landPayments = (state.landPayments||[]).filter(function(p){ return p.projId !== projId; });
+  
+  saveData();
+  renderProjects();
+  toast('Venture deleted', 'ok');
 }
 
 function openPlotByIndex(el) {
@@ -5128,6 +5143,12 @@ function openPlotByIndex(el) {
 function openHouseByIndex(el) { openPlotByIndex(el); }
 
 function savePlotClose() {
+  var modal = document.getElementById('house-modal');
+  var pi = modal.dataset.pi, pli = modal.dataset.pli;
+  if (pi !== undefined && pli !== undefined) {
+    var proj = state.projects[pi];
+    if (proj) syncProjectPlots(proj.id);
+  }
   saveData();
   closeModal('house-modal');
   renderProjects();
@@ -5138,6 +5159,64 @@ function savePlotClose() {
     updatePlotProfitDisplay();
   }
 }
+
+function syncProjectPlots(projId) {
+  var proj = (state.projects||[]).find(function(p){ return p.id===projId; });
+  if (!proj) return;
+  
+  // Delete old ProjectExpenses for this project
+  fetch(cfg.scriptUrl, {
+    method:'POST',
+    body:JSON.stringify({action:'deleteRow', sheetId:cfg.sheetId, sheetName:'ProjectExpenses', matchCol:'projId', matchVal:projId})
+  }).catch(function(){});
+  
+  // Re-sync all plot expenses
+  (proj.plots||[]).forEach(function(plt) {
+    // Construction expenses
+    (plt.constructionExpenses||[]).forEach(function(exp) {
+      pushToSheet('ProjectExpenses',
+        ['id','projId','plotId','type','category','desc','amount','date'],
+        [exp.id, projId, plt.id, 'construction', 'Construction', exp.desc||'', exp.amount||0, exp.date||'']
+      );
+    });
+    
+    // Misc expenses
+    (plt.miscExpenses||[]).forEach(function(exp) {
+      pushToSheet('ProjectExpenses',
+        ['id','projId','plotId','type','category','desc','amount','date'],
+        [exp.id, projId, plt.id, 'misc', exp.type||'Misc', '', exp.amount||0, exp.date||'']
+      );
+    });
+    
+    // Other expenses
+    (plt.otherExpenses||[]).forEach(function(exp) {
+      pushToSheet('ProjectExpenses',
+        ['id','projId','plotId','type','category','desc','amount','date'],
+        [exp.id, projId, plt.id, 'other', 'Other', exp.desc||'', exp.amount||0, exp.date||'']
+      );
+    });
+  });
+  
+  // Update Projects sheet with full plot data
+  pushToSheet('Projects',
+    ['id','name','projType','landCost','totalCents','pricePerCent','status','location','date','dealEndDate','plotsJson'],
+    [proj.id, proj.name, proj.projType, proj.landCost, proj.totalCents, proj.pricePerCent, proj.status, proj.location, proj.date, proj.dealEndDate||'', JSON.stringify(proj.plots||[])]
+  );
+  
+  // Sync LandPayments
+  fetch(cfg.scriptUrl, {
+    method:'POST',
+    body:JSON.stringify({action:'deleteRow', sheetId:cfg.sheetId, sheetName:'LandPayments', matchCol:'projId', matchVal:projId})
+  }).catch(function(){});
+  
+  (state.landPayments||[]).filter(function(p){ return p.projId===projId; }).forEach(function(pmt) {
+    pushToSheet('LandPayments',
+      ['id','projId','date','amount','notes'],
+      [pmt.id, pmt.projId, pmt.date, pmt.amount, pmt.notes||'']
+    );
+  });
+}
+
 
 function recalcHouseTotals(pi, pli) {
   var proj = state.projects[pi];
@@ -5183,6 +5262,10 @@ function updatePlotField(el, field, type) {
   var pi = Number(el.dataset.pi), pli = Number(el.dataset.pli);
   state.projects[pi].plots[pli][field] = type==='num' ? (Number(el.value)||0) : el.value;
   saveData();
+  // Sync critical fields
+  if (['status','type','salePrice','buyer','plotNo','sizeInCents'].indexOf(field) !== -1) {
+    syncProjectPlots(state.projects[pi].id);
+  }
   // Realtime updates if SOLD plot + key field changed
   if (state.projects[pi].plots[pli].status === 'sold' && (field === 'salePrice' || field === 'advanceReceived')) {
     updatePlotProfitDisplay();
@@ -5222,6 +5305,7 @@ function updatePartialPayment(el, pi, pli, ppIdx, field, type) {
   if (field === 'amount') {
     recalcPaymentTotal(pi, pli, null);
     updateAdvancesReceivedTotal();
+    syncProjectPlots(state.projects[pi].id);
   }
   // Realtime profit update if SOLD and payment changed
   if (plt.status === 'sold' && field === 'amount') updatePlotProfitDisplay();
@@ -5250,6 +5334,7 @@ function deletePartialPayment(pi, pli, ppIdx) {
   if (!plt.partialPayments) return;
   plt.partialPayments.splice(ppIdx, 1);
   saveData();
+  syncProjectPlots(state.projects[pi].id);
   recalcPaymentTotal(pi, pli, null);
   updateAdvancesReceivedTotal();
   openPlotByIndex({dataset:{proj:String(pi),plot:String(pli)}});
@@ -5272,6 +5357,7 @@ function updateConstructionExpense(pi, pli, idx, field, type, el) {
   if (field==='amount') {
     recalcHouseTotals(pi, pli);
     updateAdvancesReceivedTotal();
+    syncProjectPlots(state.projects[pi].id);
   }
 }
 function deleteConstructionExpense(pi, pli, idx) {
@@ -5279,6 +5365,7 @@ function deleteConstructionExpense(pi, pli, idx) {
   if (!plt.constructionExpenses) return;
   plt.constructionExpenses.splice(idx, 1);
   saveData();
+  syncProjectPlots(state.projects[pi].id);
   updateAdvancesReceivedTotal();
   openPlotByIndex({dataset:{proj:String(pi),plot:String(pli)}});
 }
@@ -5300,6 +5387,7 @@ function updateMiscExpense(pi, pli, idx, field, type, el) {
   if (field==='amount') {
     recalcHouseTotals(pi, pli);
     updateAdvancesReceivedTotal();
+    syncProjectPlots(state.projects[pi].id);
   }
 }
 function deleteMiscExpense(pi, pli, idx) {
@@ -5307,6 +5395,7 @@ function deleteMiscExpense(pi, pli, idx) {
   if (!plt.miscExpenses) return;
   plt.miscExpenses.splice(idx, 1);
   saveData();
+  syncProjectPlots(state.projects[pi].id);
   updateAdvancesReceivedTotal();
   openPlotByIndex({dataset:{proj:String(pi),plot:String(pli)}});
 }
@@ -5328,6 +5417,7 @@ function updateOtherExpense(pi, pli, idx, field, type, el) {
   if (field==='amount') {
     recalcHouseTotals(pi, pli);
     updateAdvancesReceivedTotal();
+    syncProjectPlots(state.projects[pi].id);
   }
 }
 function deleteOtherExpense(pi, pli, idx) {
@@ -5335,6 +5425,7 @@ function deleteOtherExpense(pi, pli, idx) {
   if (!plt.otherExpenses) return;
   plt.otherExpenses.splice(idx, 1);
   saveData();
+  syncProjectPlots(state.projects[pi].id);
   updateAdvancesReceivedTotal();
   openPlotByIndex({dataset:{proj:String(pi),plot:String(pli)}});
 }
