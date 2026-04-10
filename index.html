@@ -1151,12 +1151,14 @@ body{background:var(--bg);color:var(--tx);font-family:'Noto Sans Telugu',sans-se
 
         <!-- ── PANEL 1: FUND REGISTER (LOANS) ── -->
         <div class="fin-panel on" id="fpanel-loans">
-          <!-- Summary strip -->
-          <div class="fin-summary" id="loan-summary-strip">
+          <!-- Summary strip - 6 boxes in 2 rows -->
+          <div class="fin-summary" id="loan-summary-strip" style="grid-template-columns:repeat(3,1fr)">
             <div class="fsum-box"><div class="fsum-lbl">Total Borrowed</div><div class="fsum-val amb" id="fs-borrowed">₹0</div></div>
             <div class="fsum-box"><div class="fsum-lbl">Outstanding</div><div class="fsum-val rose" id="fs-outstanding">₹0</div></div>
             <div class="fsum-box"><div class="fsum-lbl">Total Interest Paid</div><div class="fsum-val sky" id="fs-interest">₹0</div></div>
             <div class="fsum-box"><div class="fsum-lbl">Total Principal Paid</div><div class="fsum-val teal" id="fs-principal">₹0</div></div>
+            <div class="fsum-box"><div class="fsum-lbl">Total Interest Accrued</div><div class="fsum-val amb" id="fs-int-accrued">₹0</div></div>
+            <div class="fsum-box"><div class="fsum-lbl">Total Interest Balance</div><div class="fsum-val rose" id="fs-int-balance">₹0</div></div>
           </div>
           <button class="btn amb full" style="margin-bottom:12px" onclick="openNewLoanModal()">+ Add Loan / Borrowing</button>
           <div id="loan-list">
@@ -7063,7 +7065,7 @@ function renderLoanList() {
   var loans = state.loans||[];
 
   // Summary totals
-  var totalBorrowed=0, totalOutstanding=0, totalIntPaid=0, totalPrinPaid=0;
+  var totalBorrowed=0, totalOutstanding=0, totalIntPaid=0, totalPrinPaid=0, totalIntAccrued=0, totalIntBalance=0;
   loans.forEach(function(loan) {
     var pmts = (state.loanPayments||[]).filter(function(p){ return p.loanId===loan.id; });
     var paidPrin = pmts.reduce(function(s,p){ return s+Number(p.principalAmount||0); },0);
@@ -7072,12 +7074,34 @@ function renderLoanList() {
     totalOutstanding += Math.max(loan.principal-paidPrin, 0);
     totalIntPaid     += paidInt;
     totalPrinPaid    += paidPrin;
+    
+    // Calculate accrued interest for this loan
+    if (loan.rate && loan.rateType) {
+      var loanStartDate = new Date(loan.date);
+      var today = new Date();
+      var daysElapsed = Math.floor((today - loanStartDate) / (1000 * 60 * 60 * 24));
+      var annualIntBase = Math.round(Number(loan.principal) * Number(loan.rate) / 100);
+      var accruedInt = 0;
+      if (loan.rateType === 'pa') {
+        accruedInt = Math.round(annualIntBase * daysElapsed / 365);
+      } else if (loan.rateType === 'pm') {
+        accruedInt = Math.round(annualIntBase * daysElapsed / 30);
+      } else if (loan.rateType === 'flat') {
+        accruedInt = Math.round(Number(loan.rate) * daysElapsed / 30);
+      } else if (loan.rateType === '0') {
+        accruedInt = 0;
+      }
+      totalIntAccrued += accruedInt;
+      totalIntBalance += Math.max(accruedInt - paidInt, 0);
+    }
   });
 
-  var bs=document.getElementById('fs-borrowed');   if(bs) bs.textContent=rup(totalBorrowed);
-  var os=document.getElementById('fs-outstanding'); if(os) os.textContent=rup(totalOutstanding);
-  var is=document.getElementById('fs-interest');   if(is) is.textContent=rup(totalIntPaid);
-  var ps=document.getElementById('fs-principal');  if(ps) ps.textContent=rup(totalPrinPaid);
+  var bs=document.getElementById('fs-borrowed');        if(bs) bs.textContent=rup(totalBorrowed);
+  var os=document.getElementById('fs-outstanding');     if(os) os.textContent=rup(totalOutstanding);
+  var is=document.getElementById('fs-interest');        if(is) is.textContent=rup(totalIntPaid);
+  var ps=document.getElementById('fs-principal');       if(ps) ps.textContent=rup(totalPrinPaid);
+  var ia=document.getElementById('fs-int-accrued');     if(ia) ia.textContent=rup(totalIntAccrued);
+  var ib=document.getElementById('fs-int-balance');     if(ib) ib.textContent=rup(totalIntBalance);
 
   if (!loans.length) {
     el.innerHTML='<div class="empty"><div class="ei">🏦</div><div class="et">Loans లేవు</div><div class="es">Bank loans, gold loans, hand loans అన్నీ ఇక్కడ track చేయండి</div></div>';
