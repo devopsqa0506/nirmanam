@@ -5062,8 +5062,8 @@ function openPlotByIndex(el) {
       +'<span id="pp-balance" style="font-family:JetBrains Mono;font-size:13px;font-weight:700;color:'+(balance>0?'var(--rose)':'var(--sage)')+'">'+rup(Math.max(balance,0))+'</span>'
     +'</div>';
 
-    // Plot Profit with correct cost basis
-    var _dealCentRate = proj.totalCents > 0 ? (landPaid / proj.totalCents) : 0;
+    // Plot Profit with correct cost basis - SAME AS DISPLAYED VALUES
+    var _dealCentRate = proj.totalCents > 0 ? (Number(proj.landCost||0) / proj.totalCents) : 0;
     var _landCostForPlt = _dealCentRate * Number(plt.sizeInCents||0);
     var _miscForPlt = (plt.miscExpenses||[]).reduce(function(s,e){ return s+Number(e.amount||0); },0);
     var _otherForPlt = (plt.otherExpenses||[]).reduce(function(s,e){ return s+Number(e.amount||0); },0);
@@ -5122,7 +5122,7 @@ function recalcHouseTotals(pi, pli) {
   
   // Update plot profit display if SOLD
   if (plt.status === 'sold') {
-    var _dealCentRate = proj.totalCents > 0 ? (landPaid / proj.totalCents) : 0;
+    var _dealCentRate = proj.totalCents > 0 ? (Number(proj.landCost||0) / proj.totalCents) : 0;
     var _landCostForPlt = _dealCentRate * Number(plt.sizeInCents||0);
     var _miscForPlt = (plt.miscExpenses||[]).reduce(function(s,e){ return s+Number(e.amount||0); },0);
     var _otherForPlt = (plt.otherExpenses||[]).reduce(function(s,e){ return s+Number(e.amount||0); },0);
