@@ -3252,8 +3252,16 @@ async function handlePhoto(e, source) {
     if (data.error) {
       hideProc();
       var msg = data.error.message || 'Unknown error';
-      if (source==='chat') addBubble('ai','<span class="bad">AI Error: '+msg+'</span>');
-      else toast('AI Error: '+msg, 'err');
+      var is503 = msg.includes('503') || msg.includes('overloaded') || msg.includes('quota') || msg.includes('429');
+      
+      if (is503 && cfg.apiKeys && cfg.apiKeys.length > 1) {
+        toast('⚡ Server busy — retrying with next key...', 'wrn');
+        showProc('Retrying document analysis...');
+        setTimeout(function() { handlePhoto(e, source); }, 2000);
+      } else {
+        if (source==='chat') addBubble('ai','<span class="bad">AI Error: '+msg+'</span>');
+        else toast('AI Error: '+msg, 'err');
+      }
       return;
     }
 
