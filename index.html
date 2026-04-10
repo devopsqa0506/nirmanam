@@ -1417,7 +1417,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Noto Sans Telugu',sans-se
         <span style="font-size:12px;color:var(--tx2);font-weight:500">Total Land Deal Value</span>
         <span id="p-landtotal-display" style="font-family:JetBrains Mono;font-weight:700;color:var(--amb);font-size:16px">₹0</span>
       </div>
-      <div id="p-landtotal-words" style="font-size:12px;color:var(--tx2);text-align:right;margin-top:2px;font-weight:500"></div>
+      <div id="p-landtotal-words" style="font-size:11px;color:var(--sage);text-align:right;margin-top:2px"></div>
     </div>
     <input type="hidden" id="p-landcost">
     <!-- Land Payment Schedule -->
@@ -1427,9 +1427,12 @@ body{background:var(--bg);color:var(--tx);font-family:'Noto Sans Telugu',sans-se
         <button type="button" onclick="addLandPaymentRow()" style="background:rgba(232,184,74,0.12);border:1px solid rgba(232,184,74,0.3);border-radius:7px;color:var(--amb);font-size:12px;padding:4px 10px;cursor:pointer">+ Add Payment</button>
       </div>
       <div id="p-land-payment-rows" style="margin-bottom:10px"></div>
-      <div style="background:var(--s3);border-radius:8px;padding:8px 12px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
-        <span style="font-size:12px;color:var(--tx2)">Total Paid So Far</span>
-        <span id="p-landpaid-display" style="font-family:JetBrains Mono;font-weight:700;color:var(--teal);font-size:14px">₹0</span>
+      <div style="background:var(--s3);border-radius:8px;padding:8px 12px;margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:12px;color:var(--tx2)">Total Paid So Far</span>
+          <span id="p-landpaid-display" style="font-family:JetBrains Mono;font-weight:700;color:var(--teal);font-size:14px">₹0</span>
+        </div>
+        <div id="p-landpaid-words" style="font-size:11px;color:var(--sage);text-align:right;margin-top:2px"></div>
       </div>
     </div>
     <!-- Plots Section -->
@@ -1691,7 +1694,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Noto Sans Telugu',sans-se
         <div>
           <label class="fl">Amount (₹) *</label>
           <input class="fi fi-mono" id="ln-principal" type="number" placeholder="200000" oninput="calcEmiFromForm();calcHandLoanInterest();updateLoanAmountWords()">
-          <div id="ln-amount-words" style="font-size:12px;color:var(--tx2);margin-top:2px;text-align:right;font-weight:500"></div>
+          <div id="ln-amount-words" style="font-size:11px;color:var(--sage);margin-top:2px;text-align:right"></div>
         </div>
         <div><label class="fl">Date Borrowed *</label><input class="fi" id="ln-date" type="date"></div>
       </div>
@@ -4629,7 +4632,7 @@ function calcLandTotal() {
   document.getElementById('p-landtotal-display').textContent = '₹' + fmtIN(total);
   document.getElementById('p-landcost').value = total;
   var wordsEl = document.getElementById('p-landtotal-words');
-  if (wordsEl) wordsEl.textContent = numberToWords(total);
+  if (wordsEl) wordsEl.textContent = total > 0 ? amtWords(total) : '';
 }
 
 function addLandPaymentRow(existingPmt) {
@@ -4658,6 +4661,8 @@ function updateLandPaidTotal() {
   var total = _pendingLandPmts.reduce(function(s,p){ return s+(Number(p.amount)||0); }, 0);
   var el = document.getElementById('p-landpaid-display');
   if (el) el.textContent = '₹' + fmtIN(total);
+  var wordsEl = document.getElementById('p-landpaid-words');
+  if (wordsEl) wordsEl.textContent = total > 0 ? amtWords(total) : '';
 }
 
 function clearLandPaymentRows() {
@@ -7123,7 +7128,7 @@ function calcEmiFromForm() {
 function updateLoanAmountWords() {
   var amt = Number(document.getElementById('ln-principal').value) || 0;
   var wordsEl = document.getElementById('ln-amount-words');
-  if (wordsEl) wordsEl.textContent = numberToWords(amt);
+  if (wordsEl) wordsEl.textContent = amt > 0 ? amtWords(amt) : '';
 }
 
 // ── Update EMI Schedule Entry ──
