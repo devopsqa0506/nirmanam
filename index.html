@@ -4642,7 +4642,7 @@ var _pendingLandPmts = []; // [{id,date,amount,notes}]
 function calcLandTotal() {
   var cents = Number(document.getElementById('p-cents').value) || 0;
   var ppc   = sanitizeAmount(document.getElementById('p-price-per-cent').value);
-  var total = cents * ppc;
+  var total = Math.round(cents * ppc);
   document.getElementById('p-landtotal-display').textContent = '₹' + fmtIN(total);
   document.getElementById('p-landcost').value = total;
   var wordsEl = document.getElementById('p-landtotal-words');
