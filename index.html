@@ -733,6 +733,10 @@ body{background:var(--bg);color:var(--tx);font-family:'Noto Sans Telugu',sans-se
 .lc-badge.building{background:rgba(232,184,74,0.12);color:var(--amb)}
 .lc-bar{height:6px;background:var(--s4);border-radius:3px;margin:10px 0;overflow:hidden}
 .lc-bar-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--teal),var(--amb))}
+/* Hide number input spinners globally */
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+input[type=number] { -moz-appearance:textfield; }
 </style>
 </head>
 <body>
@@ -1406,11 +1410,11 @@ body{background:var(--bg);color:var(--tx);font-family:'Noto Sans Telugu',sans-se
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
       <div>
         <label class="fl">Total Cents Bought</label>
-        <input class="fi fi-mono" id="p-cents" type="number" placeholder="30" oninput="calcLandTotal()" onblur="calcLandTotal()">
+        <input class="fi fi-mono" id="p-cents" type="text" inputmode="numeric" placeholder="30" oninput="calcLandTotal()" onblur="calcLandTotal()">
       </div>
       <div>
         <label class="fl">Price per Cent (₹)</label>
-        <input class="fi fi-mono" id="p-price-per-cent" type="number" placeholder="45000" oninput="calcLandTotal()" onblur="calcLandTotal()">
+        <input class="fi fi-mono" id="p-price-per-cent" type="text" inputmode="numeric" placeholder="45000" oninput="calcLandTotal()" onblur="calcLandTotal()">
       </div>
     </div>
     <div style="background:var(--s2);border:1px solid var(--bd);border-radius:9px;padding:10px 14px;margin-bottom:10px">
@@ -1694,7 +1698,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Noto Sans Telugu',sans-se
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px">
         <div>
           <label class="fl">Amount (₹) *</label>
-          <input class="fi fi-mono" id="ln-principal" type="number" placeholder="200000" oninput="calcEmiFromForm();calcHandLoanInterest();updateLoanAmountWords()" onblur="calcEmiFromForm();calcHandLoanInterest();updateLoanAmountWords()">
+          <input class="fi fi-mono" id="ln-principal" type="text" inputmode="numeric" placeholder="200000" oninput="calcEmiFromForm();calcHandLoanInterest();updateLoanAmountWords()" onblur="calcEmiFromForm();calcHandLoanInterest();updateLoanAmountWords()">
           <div id="ln-amount-words" style="font-size:11px;color:var(--sage);margin-top:2px;text-align:right"></div>
         </div>
         <div><label class="fl">Date Borrowed *</label><input class="fi" id="ln-date" type="date"></div>
@@ -1704,7 +1708,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Noto Sans Telugu',sans-se
     <!-- Bank / Institution fields -->
     <div id="ln-bank-fields" style="display:none">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px">
-        <div><label class="fl">Interest Rate</label><input class="fi fi-mono" id="ln-rate" type="number" step="0.1" placeholder="2" oninput="calcEmiFromForm()" onblur="calcEmiFromForm()"></div>
+        <div><label class="fl">Interest Rate</label><input class="fi fi-mono" id="ln-rate" type="text" inputmode="numeric" placeholder="2" oninput="calcEmiFromForm()" onblur="calcEmiFromForm()"></div>
         <div><label class="fl">Rate Type</label>
           <select class="fi" id="ln-ratetype" onchange="calcEmiFromForm()">
             <option value="pm">% per Month</option>
@@ -1715,15 +1719,15 @@ body{background:var(--bg);color:var(--tx);font-family:'Noto Sans Telugu',sans-se
         </div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px">
-        <div><label class="fl">EMI / Month (₹)</label><input class="fi fi-mono" id="ln-emi" type="number" placeholder="Auto-calc" oninput="calcEmiFromForm()" onblur="calcEmiFromForm()"></div>
-        <div><label class="fl">Term (months)</label><input class="fi fi-mono" id="ln-term" type="number" placeholder="12" oninput="calcEmiFromForm()" onblur="calcEmiFromForm()"></div>
+        <div><label class="fl">EMI / Month (₹)</label><input class="fi fi-mono" id="ln-emi" type="text" inputmode="numeric" placeholder="Auto-calc" oninput="calcEmiFromForm()" onblur="calcEmiFromForm()"></div>
+        <div><label class="fl">Term (months)</label><input class="fi fi-mono" id="ln-term" type="text" inputmode="numeric" placeholder="12" oninput="calcEmiFromForm()" onblur="calcEmiFromForm()"></div>
       </div>
     </div>
 
     <!-- Hand Loan fields -->
     <div id="ln-handloan-fields" style="display:none">
       <label class="fl" style="margin-top:8px">Interest Rate (% per Annum) *</label>
-      <input class="fi fi-mono" id="ln-hl-rate" type="number" step="0.1" placeholder="e.g. 18" oninput="calcHandLoanInterest()" onblur="calcHandLoanInterest()">
+      <input class="fi fi-mono" id="ln-hl-rate" type="text" inputmode="numeric" placeholder="e.g. 18" oninput="calcHandLoanInterest()" onblur="calcHandLoanInterest()">
       <!-- Interest tracking — shown when editing an existing hand loan -->
       <div id="ln-hl-track" style="display:none;background:rgba(232,93,122,0.06);border:1px solid rgba(232,93,122,0.2);border-radius:10px;padding:10px 12px;margin-top:8px">
         <div style="font-size:11px;color:var(--tx3);margin-bottom:6px;font-weight:600">INTEREST TRACKING (Annual)</div>
@@ -1734,7 +1738,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Noto Sans Telugu',sans-se
           </div>
           <div>
             <label class="fl">Interest Paid (₹)</label>
-            <input class="fi fi-mono" id="ln-hl-int-paid" type="number" placeholder="0" oninput="calcHandLoanInterest()" onblur="calcHandLoanInterest()">
+            <input class="fi fi-mono" id="ln-hl-int-paid" type="text" inputmode="numeric" placeholder="0" oninput="calcHandLoanInterest()" onblur="calcHandLoanInterest()">
           </div>
         </div>
         <label class="fl" style="margin-top:6px">Interest Balance (₹)</label>
@@ -1768,7 +1772,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Noto Sans Telugu',sans-se
       <div style="font-size:12px;font-weight:700;color:var(--teal);margin-bottom:10px">💰 Principal Payment</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div><label class="fl">Date *</label><input class="fi" id="pmt-prin-date" type="date"></div>
-        <div><label class="fl">Amount (₹)</label><input class="fi fi-mono" id="pmt-prin-amount" type="number" placeholder="0"></div>
+        <div><label class="fl">Amount (₹)</label><input class="fi fi-mono" id="pmt-prin-amount" type="text" inputmode="numeric" placeholder="0"></div>
       </div>
     </div>
     
@@ -1777,7 +1781,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Noto Sans Telugu',sans-se
       <div style="font-size:12px;font-weight:700;color:var(--rose);margin-bottom:10px">📊 Interest Payment</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div><label class="fl">Date *</label><input class="fi" id="pmt-int-date" type="date"></div>
-        <div><label class="fl">Amount (₹)</label><input class="fi fi-mono" id="pmt-int-amount" type="number" placeholder="0"></div>
+        <div><label class="fl">Amount (₹)</label><input class="fi fi-mono" id="pmt-int-amount" type="text" inputmode="numeric" placeholder="0"></div>
       </div>
     </div>
     
@@ -1801,7 +1805,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Noto Sans Telugu',sans-se
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
       <div><label class="fl">Date *</label><input class="fi" id="pexp-date" type="date"></div>
-      <div><label class="fl">Amount (₹) *</label><input class="fi fi-mono" id="pexp-amount" type="number" placeholder="50000"></div>
+      <div><label class="fl">Amount (₹) *</label><input class="fi fi-mono" id="pexp-amount" type="text" inputmode="numeric" placeholder="50000"></div>
     </div>
 
     <label class="fl">Category *</label>
@@ -1834,7 +1838,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Noto Sans Telugu',sans-se
     <select class="fi" id="inc-project"></select>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
       <div><label class="fl">Date *</label><input class="fi" id="inc-date" type="date"></div>
-      <div><label class="fl">Amount (₹) *</label><input class="fi fi-mono" id="inc-amount" type="number" placeholder="4500000"></div>
+      <div><label class="fl">Amount (₹) *</label><input class="fi fi-mono" id="inc-amount" type="text" inputmode="numeric" placeholder="4500000"></div>
     </div>
     <label class="fl">Type</label>
     <select class="fi" id="inc-type">
@@ -1862,7 +1866,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Noto Sans Telugu',sans-se
     <input type="hidden" id="lp-proj-id">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
       <div><label class="fl">Date *</label><input class="fi" id="lp-date" type="date"></div>
-      <div><label class="fl">Amount Paid (₹) *</label><input class="fi fi-mono" id="lp-amount" type="number" placeholder="500000"></div>
+      <div><label class="fl">Amount Paid (₹) *</label><input class="fi fi-mono" id="lp-amount" type="text" inputmode="numeric" placeholder="500000"></div>
     </div>
     <label class="fl">Notes (optional)</label>
     <input class="fi" id="lp-notes" placeholder="ఉదా: 1st installment, Registration day payment">
@@ -4674,7 +4678,7 @@ function renderPlotRows() {
   _pendingPlots.forEach(function(row, i) {
     html += '<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">'
       +'<input class="fi fi-mono" type="text" placeholder="No." value="'+escH(row.plotNo)+'" oninput="_pendingPlots['+i+'].plotNo=this.value" style="flex:0 0 52px;margin-bottom:0;font-size:13px;text-align:center">'
-      +'<input class="fi fi-mono" type="number" placeholder="Cents" value="'+(row.sizeInCents||'')+'" oninput="_pendingPlots['+i+'].sizeInCents=Math.round(Number(this.value)||0)" onblur="_pendingPlots['+i+'].sizeInCents=Math.round(Number(this.value)||0)" style="flex:0 0 70px;margin-bottom:0;font-size:13px">'
+      +'<input class="fi fi-mono" type="text" inputmode="numeric" placeholder="Cents" value="'+(row.sizeInCents||'')+'" oninput="_pendingPlots['+i+'].sizeInCents=Math.round(Number(this.value)||0)" onblur="_pendingPlots['+i+'].sizeInCents=Math.round(Number(this.value)||0)" style="flex:0 0 70px;margin-bottom:0;font-size:13px">'
       +'<select oninput="_pendingPlots['+i+'].type=this.value" style="flex:1;background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:8px 10px;color:var(--tx);font-size:13px;margin-bottom:0">'
         +'<option value="plot" '+(row.type==='plot'?'selected':'')+'>📋 Plot (sell)</option>'
         +'<option value="house" '+(row.type==='house'?'selected':'')+'>🏗️ House (build)</option>'
@@ -4716,7 +4720,7 @@ function renderLandPaymentRows() {
   _pendingLandPmts.forEach(function(row, i) {
     html += '<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px" data-lp-idx="'+i+'">'
       +'<input class="fi fi-mono" type="date" value="'+row.date+'" oninput="_pendingLandPmts['+i+'].date=this.value;updateLandPaidTotal()" style="flex:0 0 130px;margin-bottom:0;font-size:13px">'
-      +'<input class="fi fi-mono" type="number" placeholder="Amount ₹" value="'+(row.amount||'')+'" oninput="_pendingLandPmts['+i+'].amount=Math.round(Number(this.value)||0);updateLandPaidTotal()" onblur="_pendingLandPmts['+i+'].amount=Math.round(Number(this.value)||0);updateLandPaidTotal()" style="flex:1;margin-bottom:0;font-size:13px">'
+      +'<input class="fi fi-mono" type="text" inputmode="numeric" placeholder="Amount ₹" value="'+(row.amount||'')+'" oninput="_pendingLandPmts['+i+'].amount=Math.round(Number(this.value)||0);updateLandPaidTotal()" onblur="_pendingLandPmts['+i+'].amount=Math.round(Number(this.value)||0);updateLandPaidTotal()" style="flex:1;margin-bottom:0;font-size:13px">'
       +'<input class="fi" type="text" placeholder="Note" value="'+(row.notes||'')+'" oninput="_pendingLandPmts['+i+'].notes=this.value" style="flex:1;margin-bottom:0;font-size:13px">'
       +'<button type="button" onclick="_pendingLandPmts.splice('+i+',1);renderLandPaymentRows();updateLandPaidTotal()" style="background:none;border:none;color:var(--rose);font-size:16px;cursor:pointer;padding:0 4px;flex-shrink:0">×</button>'
     +'</div>';
@@ -5043,7 +5047,7 @@ function openPlotByIndex(el) {
     +'<div><label class="fl">Plot No</label>'
       +'<input type="text" class="fi fi-mono" value="'+escH(plt.plotNo||'')+'" placeholder="1 / A1" data-pi="'+pi+'" data-pli="'+pli+'" onchange="updatePlotField(this,\'plotNo\',\'text\')" style="text-align:center"></div>'
     +'<div><label class="fl">Size (Cents)</label>'
-      +'<input type="number" class="fi fi-mono" value="'+(plt.sizeInCents||'')+'" placeholder="3" data-pi="'+pi+'" data-pli="'+pli+'" onchange="updatePlotField(this,\'sizeInCents\',\'num\')" onblur="updatePlotField(this,\'sizeInCents\',\'num\')"></div>'
+      +'<input type="text" inputmode="numeric" class="fi fi-mono" value="'+(plt.sizeInCents||'')+'" placeholder="3" data-pi="'+pi+'" data-pli="'+pli+'" onchange="updatePlotField(this,\'sizeInCents\',\'num\')" onblur="updatePlotField(this,\'sizeInCents\',\'num\')"></div>'
   +'</div>';
 
   // Type
@@ -5080,7 +5084,7 @@ function openPlotByIndex(el) {
         ? '<div class="fi" style="opacity:0.7;font-size:12px">Advance Construction</div>'
         : '<input type="text" class="fi" value="'+escH(ce.desc||'')+'" placeholder="Description" '
             +'onchange="updateConstructionExpense('+pi+','+pli+','+ceIdx+',\'desc\',\'text\',this)" style="font-size:12px">')
-      +'<div><input type="number" class="fi fi-mono" value="'+(ce.amount||'')+'" placeholder="Amount" '
+      +'<div><input type="text" inputmode="numeric" class="fi fi-mono" value="'+(ce.amount||'')+'" placeholder="Amount" '
         +'onchange="updateConstructionExpense('+pi+','+pli+','+ceIdx+',\'amount\',\'num\',this)" onblur="updateConstructionExpense('+pi+','+pli+','+ceIdx+',\'amount\',\'num\',this)" oninput="showAmtLabel(this.value,\'ce-w-'+ceIdx+'\')" style="font-size:12px">'
         +'<div id="ce-w-'+ceIdx+'" style="font-size:11px;font-weight:600;color:var(--sky);margin-top:2px;min-height:14px">'+(ce.amount?amtWords(ce.amount):'')+'</div></div>'
       +'<input type="date" class="fi" value="'+(ce.date||'')+'" '
@@ -5108,7 +5112,7 @@ function openPlotByIndex(el) {
       +'<select class="fi" onchange="updateMiscExpense('+pi+','+pli+','+meIdx+',\'type\',\'text\',this)" style="font-size:12px">'
       +miscTypes.map(function(t){ return '<option value="'+t.v+'" '+(me.type===t.v?'selected':'')+'>'+t.l+'</option>'; }).join('')
       +'</select>'
-      +'<div><input type="number" class="fi fi-mono" value="'+(me.amount||'')+'" placeholder="Amount" '
+      +'<div><input type="text" inputmode="numeric" class="fi fi-mono" value="'+(me.amount||'')+'" placeholder="Amount" '
         +'onchange="updateMiscExpense('+pi+','+pli+','+meIdx+',\'amount\',\'num\',this)" onblur="updateMiscExpense('+pi+','+pli+','+meIdx+',\'amount\',\'num\',this)" oninput="showAmtLabel(this.value,\'me-w-'+meIdx+'\')" style="font-size:12px">'
         +'<div id="me-w-'+meIdx+'" style="font-size:11px;font-weight:600;color:var(--teal);margin-top:2px;min-height:14px">'+(me.amount?amtWords(me.amount):'')+'</div></div>'
       +'<input type="date" class="fi" value="'+(me.date||'')+'" '
@@ -5125,7 +5129,7 @@ function openPlotByIndex(el) {
       +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:6px;align-items:center">'
       +'<input type="text" class="fi" value="'+escH(oe.desc||'')+'" placeholder="Description" '
         +'onchange="updateOtherExpense('+pi+','+pli+','+oeIdx+',\'desc\',\'text\',this)" style="font-size:12px">'
-      +'<div><input type="number" class="fi fi-mono" value="'+(oe.amount||'')+'" placeholder="Amount" '
+      +'<div><input type="text" inputmode="numeric" class="fi fi-mono" value="'+(oe.amount||'')+'" placeholder="Amount" '
         +'onchange="updateOtherExpense('+pi+','+pli+','+oeIdx+',\'amount\',\'num\',this)" onblur="updateOtherExpense('+pi+','+pli+','+oeIdx+',\'amount\',\'num\',this)" oninput="showAmtLabel(this.value,\'oe-w-'+oeIdx+'\')" style="font-size:12px">'
         +'<div id="oe-w-'+oeIdx+'" style="font-size:11px;font-weight:600;color:var(--amb);margin-top:2px;min-height:14px">'+(oe.amount?amtWords(oe.amount):'')+'</div></div>'
       +'<input type="date" class="fi" value="'+(oe.date||'')+'" '
@@ -5162,11 +5166,11 @@ function openPlotByIndex(el) {
   // Sale Price, Buyer, Payments — only when SOLD
   if (isSold) {
     body += '<label class="fl" style="margin-top:9px">Sale Price (₹)</label>'
-      +'<input type="number" class="fi fi-mono" id="hm-sale-price" value="'+(plt.salePrice||'')+'" placeholder="Actual sale price" '
+      +'<input type="text" inputmode="numeric" class="fi fi-mono" id="hm-sale-price" value="'+(plt.salePrice||'')+'" placeholder="Actual sale price" '
       +'data-pi="'+pi+'" data-pli="'+pli+'" onchange="updatePlotField(this,\'salePrice\',\'num\')" onblur="updatePlotField(this,\'salePrice\',\'num\')" oninput="showAmtLabel(this.value,\'sp-words\'); updatePlotProfitInstant('+pi+','+pli+',this.value)">'
       +'<div id="sp-words" style="font-size:12px;font-weight:600;color:var(--amb);margin-top:3px;min-height:16px">'+(plt.salePrice?amtWords(plt.salePrice):'')+'</div>'
       +'<label class="fl" style="margin-top:9px">Advance Received (₹)</label>'
-      +'<input type="number" class="fi fi-mono" id="hm-adv-rcvd" value="'+(plt.advanceReceived||'')+'" placeholder="Token / advance amount" '
+      +'<input type="text" inputmode="numeric" class="fi fi-mono" id="hm-adv-rcvd" value="'+(plt.advanceReceived||'')+'" placeholder="Token / advance amount" '
       +'data-pi="'+pi+'" data-pli="'+pli+'" onchange="updatePlotField(this,\'advanceReceived\',\'num\')" onblur="updatePlotField(this,\'advanceReceived\',\'num\')" oninput="recalcPaymentTotal('+pi+','+pli+',this.value); showAmtLabel(this.value,\'adv-words\')">'
       +'<div id="adv-words" style="font-size:12px;font-weight:600;color:var(--teal);margin-top:3px;min-height:16px">'+(plt.advanceReceived?amtWords(plt.advanceReceived):'')+'</div>'
       +'<label class="fl" style="margin-top:9px">Buyer Name</label>'
@@ -5183,7 +5187,7 @@ function openPlotByIndex(el) {
           +'<input type="text" class="fi" value="'+escH(pp.desc||'')+'" placeholder="Description" '
             +'data-pi="'+pi+'" data-pli="'+pli+'" data-ppidx="'+ppIdx+'" '
             +'onchange="updatePartialPayment(this,'+pi+','+pli+','+ppIdx+',\'desc\',\'text\')" style="font-size:12px">'
-          +'<div><input type="number" class="fi fi-mono" value="'+(pp.amount||'')+'" placeholder="Amount" '
+          +'<div><input type="text" inputmode="numeric" class="fi fi-mono" value="'+(pp.amount||'')+'" placeholder="Amount" '
             +'data-pi="'+pi+'" data-pli="'+pli+'" data-ppidx="'+ppIdx+'" '
             +'onchange="updatePartialPayment(this,'+pi+','+pli+','+ppIdx+',\'amount\',\'num\')" onblur="updatePartialPayment(this,'+pi+','+pli+','+ppIdx+',\'amount\',\'num\')" oninput="recalcPaymentTotal('+pi+','+pli+',null); showAmtLabel(this.value,\'pp-w-'+ppIdx+'\')" style="font-size:12px">'
             +'<div id="pp-w-'+ppIdx+'" style="font-size:11px;font-weight:600;color:var(--sage);margin-top:2px;min-height:14px">'+(pp.amount?amtWords(pp.amount):'')+'</div></div>'
