@@ -5452,22 +5452,6 @@ function syncProjectPlots(projId) {
     })
   }).catch(function(){});
   
-  // Sync LandPayments
-  fetch(cfg.scriptUrl, {
-    method:'POST',
-    body:JSON.stringify({action:'deleteRow', sheetId:cfg.sheetId, sheetName:'LandPayments', matchCol:'projId', matchVal:projId})
-  }).catch(function(){});
-  
-  (state.landPayments||[]).filter(function(p){ return p.projId===projId; }).forEach(function(pmt) {
-    pushToSheet('LandPayments',
-      ['id','projId','date','amount','notes'],
-      [pmt.id, pmt.projId, pmt.date, pmt.amount, pmt.notes||'']
-    );
-  });
-}
-
-// ══ Sync ProjectIncome sheet ══
-function syncProjectIncome(projId) {
   var proj = (state.projects||[]).find(function(p){ return p.id===projId; });
   if (!proj) return;
   
