@@ -2096,7 +2096,7 @@ function loadData() {
 
 // ── One-time data repair: round all integer-intended amounts that got float-corrupted ──
 function repairAmountPrecision(data) {
-  if (!data || data.__amtRepairV1) return data;
+  if (!data) return data;
   var changed = 0;
   (data.landPayments||[]).forEach(function(p) {
     var r = Math.round(p.amount); if (r !== p.amount) { p.amount = r; changed++; }
@@ -2134,7 +2134,6 @@ function repairAmountPrecision(data) {
   (data.projExpenses||[]).forEach(function(e) {
     var r = Math.round(e.amount); if (r !== e.amount) { e.amount = r; changed++; }
   });
-  data.__amtRepairV1 = true;
   if (changed > 0) {
     STORE.set(DATA_KEY, data);
     console.log('SiteBook: repaired ' + changed + ' corrupted amount(s) in localStorage');
@@ -2602,7 +2601,7 @@ function mergeSheetData(sheetData) {
     if (!state.loans) state.loans=[];
     var lnIds = new Set(state.loans.map(function(l){ return l.id; }));
     lnRows.forEach(function(r){ var o={}; lnHdrs.forEach(function(h,i){ o[h]=r[i]; });
-      if (o.id && !lnIds.has(o.id)) { o.principal=Number(o.principal)||0; o.rate=Number(o.rate)||0; state.loans.push(o); }
+      if (o.id && !lnIds.has(o.id)) { o.principal=Math.round(Number(o.principal)||0); o.rate=Number(o.rate)||0; state.loans.push(o); }
     });
   }
   // ── Merge LoanPayments ──
@@ -2612,10 +2611,10 @@ function mergeSheetData(sheetData) {
     var lpIds = new Set(state.loanPayments.map(function(p){ return p.id; }));
     lpRows.forEach(function(r){ var o={}; lpHdrs.forEach(function(h,i){ o[h]=r[i]; });
       if (o.id && !lpIds.has(o.id)) { 
-        o.amount=Number(o.amount)||0; 
+        o.amount=Math.round(Number(o.amount)||0); 
         // Support both old and new schema
-        o.interestAmount=Number(o.interestAmount||o.interestPart)||0; 
-        o.principalAmount=Number(o.principalAmount||o.principalPart)||0; 
+        o.interestAmount=Math.round(Number(o.interestAmount||o.interestPart)||0); 
+        o.principalAmount=Math.round(Number(o.principalAmount||o.principalPart)||0); 
         state.loanPayments.push(o); 
       }
     });
@@ -2626,7 +2625,7 @@ function mergeSheetData(sheetData) {
     if (!state.projIncome) state.projIncome=[];
     var piIds = new Set(state.projIncome.map(function(i){ return i.id; }));
     piRows.forEach(function(r){ var o={}; piHdrs.forEach(function(h,i){ o[h]=r[i]; });
-      if (o.id && !piIds.has(o.id)) { o.amount=Number(o.amount)||0; state.projIncome.push(o); }
+      if (o.id && !piIds.has(o.id)) { o.amount=Math.round(Number(o.amount)||0); state.projIncome.push(o); }
     });
   }
   // ── Merge ProjectExpenses ──
@@ -2636,7 +2635,7 @@ function mergeSheetData(sheetData) {
     var lpIds2 = new Set(state.landPayments.map(function(p){ return p.id; }));
     lpRows2.forEach(function(r){
       var o={}; lpHdrs2.forEach(function(h,i){ o[h]=r[i]; });
-      if (o.id && !lpIds2.has(o.id)) { o.amount=Number(o.amount)||0; state.landPayments.push(o); }
+      if (o.id && !lpIds2.has(o.id)) { o.amount=Math.round(Number(o.amount)||0); state.landPayments.push(o); }
     });
   }
   if (sheetData.ProjectExpenses && sheetData.ProjectExpenses.length > 1) {
@@ -2644,7 +2643,7 @@ function mergeSheetData(sheetData) {
     if (!state.projExpenses) state.projExpenses=[];
     var peIds = new Set(state.projExpenses.map(function(e){ return e.id; }));
     peRows.forEach(function(r){ var o={}; peHdrs.forEach(function(h,i){ o[h]=r[i]; });
-      if (o.id && !peIds.has(o.id)) { o.amount=Number(o.amount)||0; state.projExpenses.push(o); }
+      if (o.id && !peIds.has(o.id)) { o.amount=Math.round(Number(o.amount)||0); state.projExpenses.push(o); }
     });
   }
   
@@ -4675,7 +4674,7 @@ function renderPlotRows() {
   _pendingPlots.forEach(function(row, i) {
     html += '<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">'
       +'<input class="fi fi-mono" type="text" placeholder="No." value="'+escH(row.plotNo)+'" oninput="_pendingPlots['+i+'].plotNo=this.value" style="flex:0 0 52px;margin-bottom:0;font-size:13px;text-align:center">'
-      +'<input class="fi fi-mono" type="number" placeholder="Cents" value="'+(row.sizeInCents||'')+'" oninput="_pendingPlots['+i+'].sizeInCents=Number(this.value)||0" onblur="_pendingPlots['+i+'].sizeInCents=Number(this.value)||0" style="flex:0 0 70px;margin-bottom:0;font-size:13px">'
+      +'<input class="fi fi-mono" type="number" placeholder="Cents" value="'+(row.sizeInCents||'')+'" oninput="_pendingPlots['+i+'].sizeInCents=Math.round(Number(this.value)||0)" onblur="_pendingPlots['+i+'].sizeInCents=Math.round(Number(this.value)||0)" style="flex:0 0 70px;margin-bottom:0;font-size:13px">'
       +'<select oninput="_pendingPlots['+i+'].type=this.value" style="flex:1;background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:8px 10px;color:var(--tx);font-size:13px;margin-bottom:0">'
         +'<option value="plot" '+(row.type==='plot'?'selected':'')+'>📋 Plot (sell)</option>'
         +'<option value="house" '+(row.type==='house'?'selected':'')+'>🏗️ House (build)</option>'
@@ -4717,7 +4716,7 @@ function renderLandPaymentRows() {
   _pendingLandPmts.forEach(function(row, i) {
     html += '<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px" data-lp-idx="'+i+'">'
       +'<input class="fi fi-mono" type="date" value="'+row.date+'" oninput="_pendingLandPmts['+i+'].date=this.value;updateLandPaidTotal()" style="flex:0 0 130px;margin-bottom:0;font-size:13px">'
-      +'<input class="fi fi-mono" type="number" placeholder="Amount ₹" value="'+(row.amount||'')+'" oninput="_pendingLandPmts['+i+'].amount=Number(this.value)||0;updateLandPaidTotal()" onblur="_pendingLandPmts['+i+'].amount=Number(this.value)||0;updateLandPaidTotal()" style="flex:1;margin-bottom:0;font-size:13px">'
+      +'<input class="fi fi-mono" type="number" placeholder="Amount ₹" value="'+(row.amount||'')+'" oninput="_pendingLandPmts['+i+'].amount=Math.round(Number(this.value)||0);updateLandPaidTotal()" onblur="_pendingLandPmts['+i+'].amount=Math.round(Number(this.value)||0);updateLandPaidTotal()" style="flex:1;margin-bottom:0;font-size:13px">'
       +'<input class="fi" type="text" placeholder="Note" value="'+(row.notes||'')+'" oninput="_pendingLandPmts['+i+'].notes=this.value" style="flex:1;margin-bottom:0;font-size:13px">'
       +'<button type="button" onclick="_pendingLandPmts.splice('+i+',1);renderLandPaymentRows();updateLandPaidTotal()" style="background:none;border:none;color:var(--rose);font-size:16px;cursor:pointer;padding:0 4px;flex-shrink:0">×</button>'
     +'</div>';
@@ -4749,9 +4748,9 @@ function saveProject() {
     id: editId || ('proj_' + Date.now()),
     name: name,
     projType: 'venture',
-    landCost: Number(document.getElementById('p-landcost').value) || 0,
-    totalCents: Number(document.getElementById('p-cents').value) || 0,
-    pricePerCent: Number(document.getElementById('p-price-per-cent').value) || 0,
+    landCost: Math.round(Number(document.getElementById('p-landcost').value) || 0),
+    totalCents: Math.round(Number(document.getElementById('p-cents').value) || 0),
+    pricePerCent: Math.round(Number(document.getElementById('p-price-per-cent').value) || 0),
     status: document.getElementById('p-status').value,
     date: document.getElementById('p-date').value || today(),
     dealEndDate: document.getElementById('p-deal-end-date').value || '',
@@ -4799,7 +4798,7 @@ function saveProject() {
   }
   _pendingLandPmts.forEach(function(row) {
     if (row.amount > 0 && row.date) {
-      var pmt = { id: row.id, projId: proj.id, date: row.date, amount: Number(row.amount)||0, notes: row.notes||'' };
+      var pmt = { id: row.id, projId: proj.id, date: row.date, amount: Math.round(Number(row.amount)||0), notes: row.notes||'' };
       state.landPayments.push(pmt);
       pushToSheet('LandPayments',
         ['id','projId','date','amount','notes'],
@@ -5400,7 +5399,7 @@ function recalcHouseTotals(pi, pli) {
 
 function updatePlotField(el, field, type) {
   var pi = Number(el.dataset.pi), pli = Number(el.dataset.pli);
-  state.projects[pi].plots[pli][field] = type==='num' ? (Number(el.value)||0) : el.value;
+  state.projects[pi].plots[pli][field] = type==='num' ? Math.round(Number(el.value)||0) : el.value;
   saveData();
   // Sync critical fields
   if (['status','type','salePrice','buyer','plotNo','sizeInCents'].indexOf(field) !== -1) {
@@ -5425,7 +5424,7 @@ function updatePlotPhase(el) {
   var pi=Number(el.dataset.pi), pli=Number(el.dataset.pli), ph=el.dataset.ph;
   var phases = ['foundation','structure','roof','electrical','plumbing','finishing'];
   if (!state.projects[pi].plots[pli].phases) state.projects[pi].plots[pli].phases = {};
-  state.projects[pi].plots[pli].phases[ph] = Number(el.value)||0;
+  state.projects[pi].plots[pli].phases[ph] = Math.round(Number(el.value)||0);
   var total = phases.reduce(function(s,p){ return s+Number(state.projects[pi].plots[pli].phases[p]||0); },0);
   state.projects[pi].plots[pli].constructionCost = total;
   var tot = document.getElementById('hm-total');
@@ -5448,7 +5447,7 @@ function addPartialPayment(pi, pli) {
 function updatePartialPayment(el, pi, pli, ppIdx, field, type) {
   var plt = state.projects[pi].plots[pli];
   if (!plt.partialPayments || !plt.partialPayments[ppIdx]) return;
-  plt.partialPayments[ppIdx][field] = type==='num' ? (Number(el.value)||0) : el.value;
+  plt.partialPayments[ppIdx][field] = type==='num' ? Math.round(Number(el.value)||0) : el.value;
   saveData();
   if (field === 'amount' || field === 'desc' || field === 'date') {
     recalcPaymentTotal(pi, pli, null);
@@ -5502,7 +5501,7 @@ function addConstructionExpense(pi, pli) {
 function updateConstructionExpense(pi, pli, idx, field, type, el) {
   var plt = state.projects[pi].plots[pli];
   if (!plt.constructionExpenses || !plt.constructionExpenses[idx]) return;
-  plt.constructionExpenses[idx][field] = type==='num' ? (Number(el.value)||0) : el.value;
+  plt.constructionExpenses[idx][field] = type==='num' ? Math.round(Number(el.value)||0) : el.value;
   saveData();
   if (field==='amount') {
     recalcHouseTotals(pi, pli);
@@ -5532,7 +5531,7 @@ function addMiscExpense(pi, pli) {
 function updateMiscExpense(pi, pli, idx, field, type, el) {
   var plt = state.projects[pi].plots[pli];
   if (!plt.miscExpenses || !plt.miscExpenses[idx]) return;
-  plt.miscExpenses[idx][field] = type==='num' ? (Number(el.value)||0) : el.value;
+  plt.miscExpenses[idx][field] = type==='num' ? Math.round(Number(el.value)||0) : el.value;
   saveData();
   if (field==='amount') {
     recalcHouseTotals(pi, pli);
@@ -5562,7 +5561,7 @@ function addOtherExpense(pi, pli) {
 function updateOtherExpense(pi, pli, idx, field, type, el) {
   var plt = state.projects[pi].plots[pli];
   if (!plt.otherExpenses || !plt.otherExpenses[idx]) return;
-  plt.otherExpenses[idx][field] = type==='num' ? (Number(el.value)||0) : el.value;
+  plt.otherExpenses[idx][field] = type==='num' ? Math.round(Number(el.value)||0) : el.value;
   saveData();
   if (field==='amount') {
     recalcHouseTotals(pi, pli);
@@ -7254,7 +7253,7 @@ function updateEmiEntry(loanId, origDate, field, value) {
     entry = { id:'sch_'+Date.now(), loanId:loanId, origDate:origDate, date:origDate, amount:loan?loan.emi:0, paid:false };
     state.emiSchedule.push(entry);
   }
-  if (field==='amount') entry.amount = Number(value)||0;
+  if (field==='amount') entry.amount = Math.round(Number(value)||0);
   else if (field==='date') entry.date = value;
   saveData();
 }
@@ -7393,7 +7392,7 @@ function saveLoan() {
   var editId    = document.getElementById('ln-edit-id').value;
   var loanType  = document.getElementById('ln-type').value;
   var name      = document.getElementById('ln-name').value.trim();
-  var principal = Number(document.getElementById('ln-principal').value) || 0;
+  var principal = Math.round(Number(document.getElementById('ln-principal').value) || 0);
   var date      = document.getElementById('ln-date').value;
   var notes     = document.getElementById('ln-notes').value.trim();
 
@@ -7423,13 +7422,13 @@ function saveLoan() {
   if (loanType === 'bank') {
     loan.rate      = Number(document.getElementById('ln-rate').value) || 0;
     loan.rateType  = document.getElementById('ln-ratetype').value;
-    loan.emi       = Number(document.getElementById('ln-emi').value) || 0;
-    loan.termMonths= Number(document.getElementById('ln-term').value) || 0;
+    loan.emi       = Math.round(Number(document.getElementById('ln-emi').value) || 0);
+    loan.termMonths= Math.round(Number(document.getElementById('ln-term').value) || 0);
   } else {
     // handloan
     loan.rate         = Number(document.getElementById('ln-hl-rate').value) || 0;
     loan.rateType     = 'pa';
-    loan.interestPaid = Number(document.getElementById('ln-hl-int-paid').value) || 0;
+    loan.interestPaid = Math.round(Number(document.getElementById('ln-hl-int-paid').value) || 0);
     loan.emi          = 0;
     loan.termMonths   = 0;
   }
@@ -7497,9 +7496,9 @@ function savePaymentV2() {
   
   var loanId  = el1.value;
   var prinDate = el2.value;
-  var prinAmount = Number(el3.value)||0;
+  var prinAmount = Math.round(Number(el3.value)||0);
   var intDate = el4.value;
-  var intAmount = Number(el5.value)||0;
+  var intAmount = Math.round(Number(el5.value)||0);
   var notes   = el6.value.trim();
 
   if (!prinAmount && !intAmount) { toast('At least one amount enter చేయండి','err'); return; }
@@ -7858,7 +7857,7 @@ function openAddProjIncome(projId) {
 function saveProjIncome() {
   var projId  = document.getElementById('inc-project').value;
   var date    = document.getElementById('inc-date').value;
-  var amount  = Number(document.getElementById('inc-amount').value)||0;
+  var amount  = Math.round(Number(document.getElementById('inc-amount').value)||0);
   var type    = document.getElementById('inc-type').value;
   var desc    = document.getElementById('inc-desc').value.trim();
 
@@ -7910,7 +7909,7 @@ function openAddLandPayment(projId) {
 function saveLandPayment() {
   var projId = document.getElementById('lp-proj-id').value;
   var date   = document.getElementById('lp-date').value;
-  var amount = Number(document.getElementById('lp-amount').value)||0;
+  var amount = Math.round(Number(document.getElementById('lp-amount').value)||0);
   var notes  = document.getElementById('lp-notes').value.trim();
   if (!date)   { toast('Date select చేయండి','err'); return; }
   if (!amount) { toast('Amount enter చేయండి','err'); return; }
@@ -8312,7 +8311,7 @@ function renderPL() {
 function saveProjExpense() {
   var projId   = document.getElementById('pexp-project').value;
   var date     = document.getElementById('pexp-date').value;
-  var amount   = Number(document.getElementById('pexp-amount').value)||0;
+  var amount   = Math.round(Number(document.getElementById('pexp-amount').value)||0);
   var category = document.getElementById('pexp-category').value;
   var desc     = document.getElementById('pexp-desc').value.trim();
 
