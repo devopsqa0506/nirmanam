@@ -1327,6 +1327,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Noto Sans Telugu',sans-se
           <button class="btn rose sm full" onclick="clearDocs()">🗑️ Clear Docs</button>
           <button class="btn rose sm full" onclick="clearTxns()">🗑️ Clear Transactions</button>
         </div>
+        <button class="btn amb sm full" style="margin-bottom:9px" onclick="clearLocalAndResync()">🔄 Clear Local Data &amp; Resync from Sheet</button>
         <button class="btn rose sm full" style="margin-bottom:9px" onclick="clearAll()">🗑️ Clear ALL Data</button>
         <button class="btn ghost sm full" style="color:var(--tx3)" onclick="resetApp()">🔄 Reconfigure from scratch</button>
         <button class="btn ghost sm full" style="color:var(--rose);margin-top:6px" onclick="signOut()">🚪 Sign Out</button>
@@ -2088,7 +2089,58 @@ var DATA_KEY = 'nirmit_data_v1';
   // ════════════════════════════════════════════════════════════════════════════════
   function loadCfg()  { return STORE.get(CFG_KEY)  || {}; }
 function saveCfg()  { STORE.set(CFG_KEY, cfg); }
-function loadData() { return STORE.get(DATA_KEY) || freshData(); }
+function loadData() {
+  var data = STORE.get(DATA_KEY) || freshData();
+  return repairAmountPrecision(data);
+}
+
+// ── One-time data repair: round all integer-intended amounts that got float-corrupted ──
+function repairAmountPrecision(data) {
+  if (!data || data.__amtRepairV1) return data;
+  var changed = 0;
+  (data.landPayments||[]).forEach(function(p) {
+    var r = Math.round(p.amount); if (r !== p.amount) { p.amount = r; changed++; }
+  });
+  (data.loans||[]).forEach(function(l) {
+    var r = Math.round(l.principal); if (r !== l.principal) { l.principal = r; changed++; }
+  });
+  (data.loanPayments||[]).forEach(function(p) {
+    ['amount','interestAmount','principalAmount'].forEach(function(k) {
+      if (p[k] !== undefined) { var r = Math.round(p[k]); if (r !== p[k]) { p[k] = r; changed++; } }
+    });
+  });
+  (data.projects||[]).forEach(function(proj) {
+    (proj.plots||[]).forEach(function(plt) {
+      (plt.constructionExpenses||[]).forEach(function(e) {
+        var r = Math.round(e.amount); if (r !== e.amount) { e.amount = r; changed++; }
+      });
+      (plt.miscExpenses||[]).forEach(function(e) {
+        var r = Math.round(e.amount); if (r !== e.amount) { e.amount = r; changed++; }
+      });
+      (plt.otherExpenses||[]).forEach(function(e) {
+        var r = Math.round(e.amount); if (r !== e.amount) { e.amount = r; changed++; }
+      });
+      ['salePrice','advanceReceived','constructionCost'].forEach(function(k) {
+        if (plt[k] !== undefined) { var r = Math.round(plt[k]); if (r !== plt[k]) { plt[k] = r; changed++; } }
+      });
+      (plt.partialPayments||[]).forEach(function(pp) {
+        var r = Math.round(pp.amount); if (r !== pp.amount) { pp.amount = r; changed++; }
+      });
+    });
+  });
+  (data.projIncome||[]).forEach(function(e) {
+    var r = Math.round(e.amount); if (r !== e.amount) { e.amount = r; changed++; }
+  });
+  (data.projExpenses||[]).forEach(function(e) {
+    var r = Math.round(e.amount); if (r !== e.amount) { e.amount = r; changed++; }
+  });
+  data.__amtRepairV1 = true;
+  if (changed > 0) {
+    STORE.set(DATA_KEY, data);
+    console.log('SiteBook: repaired ' + changed + ' corrupted amount(s) in localStorage');
+  }
+  return data;
+}
 function saveData() {
   // documents are session-only (cleared on app close) — rebuilt from Sheet on sync
   var toSave = Object.assign({}, state);
@@ -3076,6 +3128,20 @@ function clearAll() {
   state = freshData(); saveData(); refreshUI(); renderDocList();
   toast('Data cleared. Sheet నుండి contacts & data restore చేస్తున్నాం...', 'info');
   setTimeout(function(){ syncFromSheet(); }, 400);
+}
+
+function clearLocalAndResync() {
+  if (!confirm('Local cache delete చేసి Google Sheet నుండి fresh గా load చేయాలా?\n\nSheet లో ఉన్న data అన్నీ restore అవుతుంది.')) return;
+  // Wipe all local state but keep config (script url, sheet id, api keys)
+  state = freshData();
+  // Clear the repair flag so it runs again on fresh data
+  delete state.__amtRepairV1;
+  saveData();
+  refreshUI();
+  renderDocList();
+  renderProjects();
+  toast('Local data cleared ✓ Sheet నుండి sync చేస్తున్నాం...', 'info');
+  setTimeout(function(){ syncFromSheet(); }, 300);
 }
 
 // ════════════════════════════════════════════════════════
