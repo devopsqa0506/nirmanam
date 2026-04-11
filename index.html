@@ -4894,26 +4894,33 @@ function saveProject() {
     state.projects.push(proj);
   }
 
-  // Save land payment rows
+  // Save land payment rows (state only, sheet syncs via syncPlotLandPayments)
   if (!state.landPayments) state.landPayments = [];
   if (editId) {
     state.landPayments = state.landPayments.filter(function(p){ return p.projId !== editId; });
   }
-  // Deduplicate _pendingLandPmts by id to prevent duplicate syncs
+  // Deduplicate _pendingLandPmts by id
   var seenIds = {};
   _pendingLandPmts.forEach(function(row) {
     if (row.amount > 0 && row.date && !seenIds[row.id]) {
       seenIds[row.id] = true;
       var pmt = { id: row.id, projId: proj.id, date: row.date, amount: Number(row.amount)||0, notes: row.notes||'' };
       state.landPayments.push(pmt);
-      pushToSheet('LandPayments',
-        ['id','projId','date','amount','notes'],
-        [pmt.id, pmt.projId, pmt.date, pmt.amount, pmt.notes]
-      );
     }
   });
 
   saveData();
+  
+  // On new venture creation: divide upfront land payment equally across plots
+  if (!editId && proj.plots && proj.plots.length > 0 && proj.landCost > 0) {
+    var upfrontPerPlot = Math.round(proj.landCost / proj.plots.length);
+    proj.plots.forEach(function(plt) {
+      plt.paidToDate = upfrontPerPlot;
+    });
+    state.projects[state.projects.length - 1] = proj;
+    saveData();
+  }
+  
   closeModal('add-project');
   renderProjects();
   ['p-name','p-landcost','p-cents','p-price-per-cent','p-location','p-deal-end-date'].forEach(function(id){
@@ -8539,6 +8546,7 @@ function syncPlotLandPayments(projId) {
     );
   });
 }
+
 
 function renderLandSummaryTable() {
   var el = document.getElementById('land-summary-table');
