@@ -1997,10 +1997,20 @@ var APPS_SCRIPT_CODE = [
   '      return ok({});',
   '    }',
   '',
+  '    // ── BATCH APPEND ROWS ──',
+  '    if (action === "batchAppend") {',
+  '      var sheet = ss.getSheetByName(data.sheetName) || ss.insertSheet(data.sheetName);',
+  '      if (sheet.getLastRow() === 0 && data.headers) sheet.appendRow(data.headers);',
+  '      if (data.rows && data.rows.length > 0) {',
+  '        data.rows.forEach(function(row) { sheet.appendRow(row); });',
+  '      }',
+  '      return ok({});',
+  '    }',
+  '',
   '    // ── READ ALL SHEETS ──',
   '    if (action === "readAll") {',
   '      var result = {};',
-  '      var sheetNames = data.sheets || ["Entries","Vendors","Prices","Documents","Contacts","Projects","BillHeaders","BillItems","Loans","LoanPayments","ProjectIncome","ProjectExpenses","LandPayments"];',
+  '      var sheetNames = data.sheets || ["Entries","Vendors","Prices","Documents","Contacts","Projects","BillHeaders","BillItems","Loans","LoanPayments","ProjectIncome","ProjectExpenses","LandPayments","PlotLandPayments"];',
   '      sheetNames.forEach(function(name) {',
   '        var sh = ss.getSheetByName(name);',
   '        result[name] = (sh && sh.getLastRow() > 1) ? sh.getDataRange().getValues() : [];',
@@ -4894,12 +4904,12 @@ function saveProject() {
     state.projects.push(proj);
   }
 
-  // Save land payment rows (state only, sheet syncs via syncPlotLandPayments)
+  // Save land payment rows
   if (!state.landPayments) state.landPayments = [];
   if (editId) {
     state.landPayments = state.landPayments.filter(function(p){ return p.projId !== editId; });
   }
-  // Deduplicate _pendingLandPmts by id
+  // Deduplicate _pendingLandPmts by id (state only - sheet syncs via syncLandPayments)
   var seenIds = {};
   _pendingLandPmts.forEach(function(row) {
     if (row.amount > 0 && row.date && !seenIds[row.id]) {
@@ -4911,13 +4921,15 @@ function saveProject() {
 
   saveData();
   
-  // On new venture creation: divide upfront land payment equally across plots
+  // On new venture creation: divide upfront land cost equally across plots
   if (!editId && proj.plots && proj.plots.length > 0 && proj.landCost > 0) {
     var upfrontPerPlot = Math.round(proj.landCost / proj.plots.length);
     proj.plots.forEach(function(plt) {
       plt.paidToDate = upfrontPerPlot;
     });
-    state.projects[state.projects.length - 1] = proj;
+    // Update in state
+    var projIdx = state.projects.findIndex(function(p){ return p.id === proj.id; });
+    if (projIdx !== -1) state.projects[projIdx] = proj;
     saveData();
   }
   
@@ -4934,6 +4946,7 @@ function saveProject() {
   toast(editId ? 'Venture updated ✓' : 'Venture saved!', 'ok');
   syncProjectPlots(proj.id);
   syncPlotLandPayments(proj.id);
+  syncLandPayments(proj.id);
 }
 
 function openEditProject(projId) {
@@ -5414,32 +5427,36 @@ function syncProjectPlots(projId) {
     body:JSON.stringify({action:'deleteRow', sheetId:cfg.sheetId, sheetName:'ProjectExpenses', matchCol:'projId', matchVal:projId})
   }).catch(function(){});
   
-  // Re-sync all plot expenses
+  // Batch all project expenses
+  var expRows = [];
   (proj.plots||[]).forEach(function(plt) {
     // Construction expenses
     (plt.constructionExpenses||[]).forEach(function(exp) {
-      pushToSheet('ProjectExpenses',
-        ['id','projId','plotId','type','category','desc','amount','date'],
-        [exp.id, projId, plt.id, 'construction', 'Construction', exp.desc||'', exp.amount||0, exp.date||'']
-      );
+      expRows.push([exp.id, projId, plt.id, 'construction', 'Construction', exp.desc||'', exp.amount||0, exp.date||'']);
     });
-    
     // Misc expenses
     (plt.miscExpenses||[]).forEach(function(exp) {
-      pushToSheet('ProjectExpenses',
-        ['id','projId','plotId','type','category','desc','amount','date'],
-        [exp.id, projId, plt.id, 'misc', exp.type||'Misc', '', exp.amount||0, exp.date||'']
-      );
+      expRows.push([exp.id, projId, plt.id, 'misc', exp.type||'Misc', '', exp.amount||0, exp.date||'']);
     });
-    
     // Other expenses
     (plt.otherExpenses||[]).forEach(function(exp) {
-      pushToSheet('ProjectExpenses',
-        ['id','projId','plotId','type','category','desc','amount','date'],
-        [exp.id, projId, plt.id, 'other', 'Other', exp.desc||'', exp.amount||0, exp.date||'']
-      );
+      expRows.push([exp.id, projId, plt.id, 'other', 'Other', exp.desc||'', exp.amount||0, exp.date||'']);
     });
   });
+  
+  // Batch append all expenses at once
+  if (expRows.length > 0) {
+    fetch(cfg.scriptUrl, {
+      method:'POST',
+      body:JSON.stringify({
+        action:'batchAppend',
+        sheetId:cfg.sheetId,
+        sheetName:'ProjectExpenses',
+        headers:['id','projId','plotId','type','category','desc','amount','date'],
+        rows:expRows
+      })
+    }).catch(function(){});
+  }
   
   // Update Projects sheet with full plot data
   fetch(cfg.scriptUrl, {
@@ -5455,36 +5472,42 @@ function syncProjectPlots(projId) {
     })
   }).catch(function(){});
   
-  var proj = (state.projects||[]).find(function(p){ return p.id===projId; });
-  if (!proj) return;
-  
   // Delete old income entries for this project
   fetch(cfg.scriptUrl, {
     method:'POST',
     body:JSON.stringify({action:'deleteRow', sheetId:cfg.sheetId, sheetName:'ProjectIncome', matchCol:'projId', matchVal:projId})
   }).catch(function(){});
   
-  // Re-sync all income from plots
+  // Batch all income entries
+  var incomeRows = [];
   (proj.plots||[]).forEach(function(plt) {
     // Advance received
     if (plt.advanceReceived && plt.advanceReceived > 0) {
       var advId = 'adv_' + plt.id + '_' + Date.now();
-      pushToSheet('ProjectIncome',
-        ['id','projId','projectName','plotId','plotNo','incomeType','amount','date','buyerName','notes'],
-        [advId, projId, proj.name, plt.id, plt.plotNo||'', 'advance', plt.advanceReceived, plt.date||today(), plt.buyer||'', 'Advance received']
-      );
+      incomeRows.push([advId, projId, proj.name, plt.id, plt.plotNo||'', 'advance', plt.advanceReceived, plt.date||today(), plt.buyer||'', 'Advance received']);
     }
     
     // Partial payments
     (plt.partialPayments||[]).forEach(function(pp) {
       if (pp.amount && pp.amount > 0) {
-        pushToSheet('ProjectIncome',
-          ['id','projId','projectName','plotId','plotNo','incomeType','amount','date','buyerName','notes'],
-          [pp.id, projId, proj.name, plt.id, plt.plotNo||'', 'partial_payment', pp.amount, pp.date||today(), plt.buyer||'', pp.desc||'Partial payment']
-        );
+        incomeRows.push([pp.id, projId, proj.name, plt.id, plt.plotNo||'', 'partial_payment', pp.amount, pp.date||today(), plt.buyer||'', pp.desc||'Partial payment']);
       }
     });
   });
+  
+  // Batch append all income rows at once
+  if (incomeRows.length > 0) {
+    fetch(cfg.scriptUrl, {
+      method:'POST',
+      body:JSON.stringify({
+        action:'batchAppend',
+        sheetId:cfg.sheetId,
+        sheetName:'ProjectIncome',
+        headers:['id','projId','projectName','plotId','plotNo','incomeType','amount','date','buyerName','notes'],
+        rows:incomeRows
+      })
+    }).catch(function(){});
+  }
 }
 
 
@@ -8533,20 +8556,72 @@ function adjustPlotLandPayment(pi, pli, newPaidAmount, reason, date) {
 function syncPlotLandPayments(projId) {
   var proj = (state.projects||[]).find(function(p){ return p.id===projId; });
   if (!proj || !cfg.scriptUrl || !cfg.sheetId) return;
+  
+  // Delete all rows for this project
   fetch(cfg.scriptUrl, {
     method:'POST', mode:'no-cors',
     body: JSON.stringify({action:'deleteRow', sheetId:cfg.sheetId, sheetName:'PlotLandPayments', matchCol:'projectId', matchVal:projId})
   }).catch(function(){});
+  
+  // Batch all plot rows and append in single call
+  var rows = [];
   (proj.plots||[]).forEach(function(plt) {
     var plc = plt.plotLandCost !== undefined ? plt.plotLandCost
       : (proj.totalCents > 0 ? Math.round((Number(proj.landCost||0) / proj.totalCents) * Number(plt.sizeInCents||0)) : 0);
-    pushToSheet('PlotLandPayments',
-      ['plotId','plotNo','projectId','plotCents','plotLandCost','paidToDate','adjustmentHistory'],
-      [plt.id, plt.plotNo||'', projId, plt.sizeInCents||0, plc, plt.paidToDate||0, JSON.stringify(plt.adjustmentHistory||[])]
-    );
+    rows.push([plt.id, plt.plotNo||'', projId, plt.sizeInCents||0, plc, plt.paidToDate||0, JSON.stringify(plt.adjustmentHistory||[])]);
   });
+  
+  // Append all rows at once
+  if (rows.length > 0) {
+    var url = cfg.scriptUrl;
+    var payload = JSON.stringify({
+      action:'batchAppend',
+      sheetId:cfg.sheetId,
+      sheetName:'PlotLandPayments',
+      headers:['plotId','plotNo','projectId','plotCents','plotLandCost','paidToDate','adjustmentHistory'],
+      rows:rows
+    });
+    fetch(url, {
+      method:'POST', mode:'no-cors',
+      body: payload
+    }).then(function(){ setSyncStatus('ok'); state.lastSync = new Date().toISOString(); saveData(); }).catch(function(e){ setSyncStatus('err'); console.error('syncPlotLandPayments err:', e); });
+  }
 }
 
+function syncLandPayments(projId) {
+  if (!cfg.scriptUrl || !cfg.sheetId) return;
+  
+  // Delete old LandPayments for this project
+  fetch(cfg.scriptUrl, {
+    method:'POST', mode:'no-cors',
+    body: JSON.stringify({action:'deleteRow', sheetId:cfg.sheetId, sheetName:'LandPayments', matchCol:'projId', matchVal:projId})
+  }).catch(function(){});
+  
+  // Get all land payments for this project
+  var pmts = (state.landPayments||[]).filter(function(p){ return p.projId === projId; });
+  
+  // Batch all payment rows
+  var rows = [];
+  pmts.forEach(function(pmt) {
+    rows.push([pmt.id, pmt.projId, pmt.date, pmt.amount, pmt.notes||'']);
+  });
+  
+  // Batch append all rows at once
+  if (rows.length > 0) {
+    var url = cfg.scriptUrl;
+    var payload = JSON.stringify({
+      action:'batchAppend',
+      sheetId:cfg.sheetId,
+      sheetName:'LandPayments',
+      headers:['id','projId','date','amount','notes'],
+      rows:rows
+    });
+    fetch(url, {
+      method:'POST', mode:'no-cors',
+      body: payload
+    }).then(function(){ setSyncStatus('ok'); state.lastSync = new Date().toISOString(); saveData(); }).catch(function(e){ setSyncStatus('err'); console.error('syncLandPayments err:', e); });
+  }
+}
 
 function renderLandSummaryTable() {
   var el = document.getElementById('land-summary-table');
