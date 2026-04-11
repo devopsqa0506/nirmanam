@@ -4831,7 +4831,11 @@ function renderLandPaymentRows() {
 }
 
 function updateLandPaidTotal() {
-  var total = _pendingLandPmts.reduce(function(s,p){ return s+Number(p.amount)||0; }, 0);
+  var total = 0;
+  _pendingLandPmts.forEach(function(p) {
+    var amt = parseInt(p.amount) || 0;
+    total += amt;
+  });
   var el = document.getElementById('p-landpaid-display');
   if (el) el.textContent = '₹' + fmtIN(total);
   var wordsEl = document.getElementById('p-landpaid-words');
