@@ -4904,8 +4904,11 @@ function saveProject() {
   if (editId) {
     state.landPayments = state.landPayments.filter(function(p){ return p.projId !== editId; });
   }
+  // Deduplicate _pendingLandPmts by id to prevent duplicate syncs
+  var seenIds = {};
   _pendingLandPmts.forEach(function(row) {
-    if (row.amount > 0 && row.date) {
+    if (row.amount > 0 && row.date && !seenIds[row.id]) {
+      seenIds[row.id] = true;
       var pmt = { id: row.id, projId: proj.id, date: row.date, amount: parseInt(row.amount)||0, notes: row.notes||'' };
       state.landPayments.push(pmt);
       pushToSheet('LandPayments',
