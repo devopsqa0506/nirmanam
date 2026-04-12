@@ -6344,9 +6344,12 @@ function startQRScan() {
     if (typeof jsQR !== 'undefined') {
       startQRDecode();
     } else {
-      loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsqr/1.4.0/jsQR.js')
-        .then(function(){ startQRDecode(); })
-        .catch(function(){ if(statusEl) statusEl.textContent = 'QR library load failed. Image upload use చేయండి.'; });
+      var qrScript = document.createElement('script');
+      qrScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/jsqr/1.4.0/jsQR.js';
+      qrScript.crossOrigin = 'anonymous';
+      qrScript.onload = function(){ startQRDecode(); };
+      qrScript.onerror = function(){ if(statusEl) statusEl.textContent = 'QR library load failed. Image upload use చేయండి.'; };
+      document.head.appendChild(qrScript);
     }
   })
   .catch(function(err){
@@ -6424,6 +6427,7 @@ function scanQRFromImage(e) {
   } else {
     var scr = document.createElement('script');
     scr.src = 'https://cdnjs.cloudflare.com/ajax/libs/jsqr/1.4.0/jsQR.js';
+    scr.crossOrigin = 'anonymous';
     scr.onload = function(){ processImage(); };
     scr.onerror = function(){
       if (statusEl) { statusEl.textContent = '❌ Library load failed. Internet check చేయండి.'; statusEl.style.color = 'var(--rose)'; }
