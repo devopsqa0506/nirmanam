@@ -7221,15 +7221,8 @@ function signOut() {
   }, 500);
 }
 
-function showSetupScreen() {
-  var setup = document.getElementById('setup');
-  if (setup) {
-    setup.style.display = 'flex';
-    setTimeout(function(){ setup.style.opacity='1'; }, 30);
-  }
-}
 
-// ════════════════════════════════════════════════════════
+
 // INIT
 // ════════════════════════════════════════════════════════
 function init() {
@@ -7259,31 +7252,95 @@ function init() {
         return;
       }
       
-      // Try to load config from Google Drive (stored in SiteBook_Config.json)
-      var tempScriptUrl = STORE.get('temp_script_url');
-      
-      if (tempScriptUrl) {
-        console.log('SiteBook: Loading config from Drive via Apps Script...');
-        loadConfigFromDrive(tempScriptUrl)
-          .then(function(configData) {
-            console.log('SiteBook: Drive config loaded successfully');
-            applyConfigFromDrive(configData);
-            STORE.set('temp_script_url', configData.scriptUrl);
-            launchApp();
-            updateUserUI();
-            setTimeout(function(){
-              syncFromSheet();
-            }, 800);
-            if (GOOGLE_CLIENT_ID) initGoogleLogin();
-          })
-          .catch(function(err) {
-            console.log('SiteBook: Could not load from Drive:', err.message);
-            showSetupScreen();
-          });
+      // FIX FOR INCOGNITO: Must authenticate first before accessing Drive
+      // This ensures Apps Script knows who the user is
+      // Works in: normal browser, incognito, new tab, mobile private mode
+      if (GOOGLE_CLIENT_ID) {
+        console.log('SiteBook: No cached config - requiring authentication for Drive access');
+        showLoginScreen();
+        initGoogleLogin();
+        
+        // After user authenticates, continue trying to load config
+        // We'll check periodically if login succeeded
+        var authCheckInterval = setInterval(function() {
+          // If gapi is ready and user is signed in
+          if (gapi && gapi.auth2 && gapi.auth2.getAuthInstance) {
+            var auth = gapi.auth2.getAuthInstance();
+            if (auth && auth.isSignedIn && auth.isSignedIn.get()) {
+              clearInterval(authCheckInterval);
+              console.log('SiteBook: User authenticated, now loading Drive config');
+              
+              // User is authenticated, now try to load config from Drive
+              var tempScriptUrl = STORE.get('temp_script_url');
+              
+              if (tempScriptUrl) {
+                console.log('SiteBook: Loading config from Drive via Apps Script...');
+                loadConfigFromDrive(tempScriptUrl)
+                  .then(function(configData) {
+                    console.log('SiteBook: Drive config loaded successfully');
+                    applyConfigFromDrive(configData);
+                    STORE.set('temp_script_url', configData.scriptUrl);
+                    launchApp();
+                    updateUserUI();
+                    setTimeout(function(){
+                      syncFromSheet();
+                    }, 800);
+                  })
+                  .catch(function(err) {
+                    console.log('SiteBook: Could not load from Drive:', err.message);
+                    // If no Drive config, show manual setup (QR)
+                    console.log('SiteBook: Showing QR/manual setup screen');
+                    var setupEl = document.getElementById('setup');
+                    if (setupEl) {
+                      setupEl.style.display = 'flex';
+                      setTimeout(function(){ setupEl.style.opacity='1'; }, 30);
+                    }
+                  });
+              } else {
+                // No previous script URL, show manual setup
+                console.log('SiteBook: No temp_script_url, showing manual setup');
+                var setupEl = document.getElementById('setup');
+                if (setupEl) {
+                  setupEl.style.display = 'flex';
+                  setTimeout(function(){ setupEl.style.opacity='1'; }, 30);
+                }
+              }
+            }
+          }
+        }, 500); // Check every 500ms
+        
+        // Timeout after 10 seconds if auth doesn't complete
+        setTimeout(function() {
+          clearInterval(authCheckInterval);
+        }, 10000);
+        
       } else {
-        // No previous config - show setup screen
-        console.log('SiteBook: No config found, showing setup screen');
-        showSetupScreen();
+        // No Google Client ID - go straight to manual setup (QR)
+        console.log('SiteBook: No Google Client ID, showing manual setup');
+        var tempScriptUrl = STORE.get('temp_script_url');
+        
+        if (tempScriptUrl) {
+          console.log('SiteBook: Loading config from Drive (no auth required)...');
+          loadConfigFromDrive(tempScriptUrl)
+            .then(function(configData) {
+              console.log('SiteBook: Drive config loaded successfully');
+              applyConfigFromDrive(configData);
+              STORE.set('temp_script_url', configData.scriptUrl);
+              launchApp();
+              updateUserUI();
+              setTimeout(function(){
+                syncFromSheet();
+              }, 800);
+            })
+            .catch(function(err) {
+              console.log('SiteBook: Could not load from Drive, showing setup:', err.message);
+              setup.style.display = 'flex';
+              setTimeout(function(){ setup.style.opacity='1'; }, 30);
+            });
+        } else {
+          setup.style.display = 'flex';
+          setTimeout(function(){ setup.style.opacity='1'; }, 30);
+        }
       }
     }, 600);
   }, 2500);
