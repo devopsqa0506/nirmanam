@@ -2549,21 +2549,43 @@ function mergeSheetData(sheetData) {
     renderContacts();
   }
 
-  // ── Merge Projects ──
+  // ── Merge Projects — sheet is source of truth for project+plot data ──
   if (sheetData.Projects && sheetData.Projects.length > 1) {
     var pHdrs = sheetData.Projects[0];
     var pRows = sheetData.Projects.slice(1);
     if (!state.projects) state.projects = [];
-    var localPIds = new Set(state.projects.map(function(p){ return p.id; }));
     pRows.forEach(function(r){
       var obj = {};
       pHdrs.forEach(function(h,i){ obj[h]=r[i]; });
-      if (obj.id && !localPIds.has(obj.id)) {
-        if (!obj.houses) obj.houses = [];
-        if (!obj.agreements) obj.agreements = [];
+      if (!obj.id) return;
+      // Parse plotsJson from sheet back into plots array
+      if (obj.plotsJson) {
+        try { obj.plots = JSON.parse(obj.plotsJson); } catch(e) { obj.plots = []; }
+        // Round all amounts in parsed plots
+        (obj.plots||[]).forEach(function(plt) {
+          ['salePrice','advanceReceived','constructionCost'].forEach(function(k) {
+            if (plt[k] !== undefined) plt[k] = Math.round(Number(plt[k])||0);
+          });
+          (plt.constructionExpenses||[]).forEach(function(e){ e.amount = Math.round(Number(e.amount)||0); });
+          (plt.miscExpenses||[]).forEach(function(e){ e.amount = Math.round(Number(e.amount)||0); });
+          (plt.otherExpenses||[]).forEach(function(e){ e.amount = Math.round(Number(e.amount)||0); });
+          (plt.partialPayments||[]).forEach(function(pp){ pp.amount = Math.round(Number(pp.amount)||0); });
+        });
+      }
+      if (!obj.houses) obj.houses = [];
+      if (!obj.agreements) obj.agreements = [];
+      // Update existing project or add new one — sheet wins
+      var existingIdx = state.projects.findIndex(function(p){ return p.id === obj.id; });
+      if (existingIdx !== -1) {
+        // Preserve local-only fields, update everything else from sheet
+        var local = state.projects[existingIdx];
+        obj.agreements = local.agreements || [];
+        state.projects[existingIdx] = obj;
+      } else {
         state.projects.push(obj);
       }
     });
+    saveData();
     renderProjects();
   }
 
@@ -4804,10 +4826,7 @@ function saveProject() {
     if (row.amount > 0 && row.date) {
       var pmt = { id: row.id, projId: proj.id, date: row.date, amount: Math.round(Number(row.amount)||0), notes: row.notes||'' };
       state.landPayments.push(pmt);
-      pushToSheet('LandPayments',
-        ['id','projId','date','amount','notes'],
-        [pmt.id, pmt.projId, pmt.date, pmt.amount, pmt.notes]
-      );
+      // LandPayments sync handled exclusively by syncProjectPlots to avoid duplicate rows
     }
   });
 
@@ -4972,22 +4991,26 @@ function deleteProjByIndex(el) {
   if (cfg.scriptUrl && cfg.sheetId) {
     fetch(cfg.scriptUrl, {
       method:'POST',
-      body: JSON.stringify({action:'deleteRow', sheetId:cfg.sheetId, sheetName:'Projects', matchCol:'id', matchVal:projId})
+      mode:'no-cors',
+    body: JSON.stringify({action:'deleteRow', sheetId:cfg.sheetId, sheetName:'Projects', matchCol:'id', matchVal:projId})
     }).catch(function(){});
     
     fetch(cfg.scriptUrl, {
       method:'POST',
-      body: JSON.stringify({action:'deleteRow', sheetId:cfg.sheetId, sheetName:'ProjectExpenses', matchCol:'projId', matchVal:projId})
+      mode:'no-cors',
+    body: JSON.stringify({action:'deleteRow', sheetId:cfg.sheetId, sheetName:'ProjectExpenses', matchCol:'projId', matchVal:projId})
     }).catch(function(){});
     
     fetch(cfg.scriptUrl, {
       method:'POST',
-      body: JSON.stringify({action:'deleteRow', sheetId:cfg.sheetId, sheetName:'ProjectIncome', matchCol:'projId', matchVal:projId})
+      mode:'no-cors',
+    body: JSON.stringify({action:'deleteRow', sheetId:cfg.sheetId, sheetName:'ProjectIncome', matchCol:'projId', matchVal:projId})
     }).catch(function(){});
     
     fetch(cfg.scriptUrl, {
       method:'POST',
-      body: JSON.stringify({action:'deleteRow', sheetId:cfg.sheetId, sheetName:'LandPayments', matchCol:'projId', matchVal:projId})
+      mode:'no-cors',
+    body: JSON.stringify({action:'deleteRow', sheetId:cfg.sheetId, sheetName:'LandPayments', matchCol:'projId', matchVal:projId})
     }).catch(function(){});
   }
   
@@ -5271,6 +5294,7 @@ function syncProjectPlots(projId) {
   // Delete old ProjectExpenses for this project — wait before appending
   fetch(cfg.scriptUrl, {
     method:'POST',
+    mode:'no-cors',
     body:JSON.stringify({action:'deleteRow', sheetId:cfg.sheetId, sheetName:'ProjectExpenses', matchCol:'projId', matchVal:projId})
   }).catch(function(){}).then(function() {
     // Re-sync all plot expenses
@@ -5304,6 +5328,7 @@ function syncProjectPlots(projId) {
   // Update Projects sheet with full plot data
   fetch(cfg.scriptUrl, {
     method:'POST',
+    mode:'no-cors',
     body:JSON.stringify({
       action:'updateRow',
       sheetId:cfg.sheetId,
@@ -5318,6 +5343,7 @@ function syncProjectPlots(projId) {
   // Sync LandPayments — wait for delete before appending to avoid race condition
   fetch(cfg.scriptUrl, {
     method:'POST',
+    mode:'no-cors',
     body:JSON.stringify({action:'deleteRow', sheetId:cfg.sheetId, sheetName:'LandPayments', matchCol:'projId', matchVal:projId})
   }).catch(function(){}).then(function() {
     (state.landPayments||[]).filter(function(p){ return p.projId===projId; }).forEach(function(pmt) {
@@ -5337,6 +5363,7 @@ function syncProjectIncome(projId) {
   // Delete old income entries — wait before appending to avoid race condition
   fetch(cfg.scriptUrl, {
     method:'POST',
+    mode:'no-cors',
     body:JSON.stringify({action:'deleteRow', sheetId:cfg.sheetId, sheetName:'ProjectIncome', matchCol:'projId', matchVal:projId})
   }).catch(function(){}).then(function() {
     (proj.plots||[]).forEach(function(plt) {
