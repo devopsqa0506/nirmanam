@@ -6456,16 +6456,17 @@ function applyQRConfig(qrText) {
 
 // Also show scan QR on setup wizard for new phones
 function scanQRSetup() {
+  // Ensure display sections are set correctly BEFORE opening modal
+  var showSec = document.getElementById('qr-show-section');
+  var scanSec = document.getElementById('qr-scan-section');
+  var title   = document.getElementById('qr-modal-title');
+
+  if (showSec) showSec.style.display = 'none';
+  if (scanSec) scanSec.style.display = 'block';
+  if (title)   title.textContent = '🖼️ QR Image Select';
+
+  // Now open the modal with correct state
   openModal('qr-modal');
-  // Use setTimeout to ensure modal is rendered before DOM manipulation
-  setTimeout(function(){
-    var showSec = document.getElementById('qr-show-section');
-    var scanSec = document.getElementById('qr-scan-section');
-    var title   = document.getElementById('qr-modal-title');
-    if (showSec) showSec.style.display = 'none';
-    if (scanSec) scanSec.style.display = 'block';
-    if (title)   title.textContent = '🖼️ QR Image Select';
-  }, 100);
 }
 
 // ════════════════════════════════════════════════════════
