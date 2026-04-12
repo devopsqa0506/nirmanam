@@ -6345,7 +6345,7 @@ function startQRScan() {
       startQRDecode();
     } else {
       var qrScript = document.createElement('script');
-      qrScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/jsqr/1.4.0/jsQR.js';
+      qrScript.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
       qrScript.crossOrigin = 'anonymous';
       qrScript.onload = function(){ startQRDecode(); };
       qrScript.onerror = function(){ if(statusEl) statusEl.textContent = 'QR library load failed. Image upload use చేయండి.'; };
@@ -6426,7 +6426,7 @@ function scanQRFromImage(e) {
     processImage();
   } else {
     var scr = document.createElement('script');
-    scr.src = 'https://cdnjs.cloudflare.com/ajax/libs/jsqr/1.4.0/jsQR.js';
+    scr.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
     scr.crossOrigin = 'anonymous';
     scr.onload = function(){ processImage(); };
     scr.onerror = function(){
