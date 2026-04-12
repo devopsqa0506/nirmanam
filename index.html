@@ -6241,60 +6241,52 @@ function generateQR() {
     ks: (cfg.apiKeys||[]).map(function(k){ return {k:k.key, l:k.label}; })
   };
   var encoded = btoa(unescape(encodeURIComponent(JSON.stringify(qrData))));
-  var qrText = 'SITEBOOK:' + encoded;
+  var qrText = encoded;
 
   document.getElementById('qr-show-section').style.display = 'block';
   document.getElementById('qr-scan-section').style.display = 'none';
   document.getElementById('qr-modal-title').textContent = '📲 Setup QR Code';
   openModal('qr-modal');
 
-  // Use Google Charts API to generate QR — no library needed, always works
   setTimeout(function(){
     var canvas = document.getElementById('qr-canvas');
     var ctx = canvas.getContext('2d');
+    // Increase canvas size to 880x880 for much better quality
+    canvas.width = 880;
+    canvas.height = 880;
+    
     // Show loading
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, 220, 220);
+    ctx.fillRect(0, 0, 880, 880);
     ctx.fillStyle = '#888';
-    ctx.font = '13px sans-serif';
+    ctx.font = '40px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('Loading QR...', 110, 110);
+    ctx.fillText('Generating QR...', 440, 440);
 
-    // Load QR via image from Google Charts (high quality)
+    // Load QR via qrserver - request larger size for better fidelity
     var encodedText = encodeURIComponent(qrText);
+    var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=880x880&margin=1&format=png&data=' + encodedText;
+    
     var img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = function(){
-      ctx.clearRect(0, 0, 220, 220);
-      // Draw at high quality - use larger source if available
-      ctx.drawImage(img, 0, 0, 220, 220);
+      ctx.clearRect(0, 0, 880, 880);
+      ctx.drawImage(img, 0, 0, 880, 880);
     };
     img.onerror = function(){
-      // Fallback: use qrserver.com with size param to get crisp PNG
-      var img2 = new Image();
-      img2.crossOrigin = 'anonymous';
-      img2.onload = function(){
-        ctx.clearRect(0, 0, 220, 220);
-        ctx.drawImage(img2, 0, 0, 220, 220);
-      };
-      img2.onerror = function(){
-        // Last fallback: show text to copy
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, 220, 220);
-        ctx.fillStyle = '#333';
-        ctx.font = '11px monospace';
-        ctx.textAlign = 'center';
-        ctx.fillText('QR load failed.', 110, 90);
-        ctx.fillText('Use text below', 110, 110);
-        ctx.fillText('to transfer keys.', 110, 130);
-        document.getElementById('qr-fallback-text').style.display = 'block';
-        document.getElementById('qr-fallback-val').textContent = qrText;
-      };
-      img2.src = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&format=png&data=' + encodedText;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, 880, 880);
+      ctx.fillStyle = '#333';
+      ctx.font = '20px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('QR load failed.', 440, 420);
+      ctx.fillText('Use text to transfer:', 440, 470);
+      document.getElementById('qr-fallback-text').style.display = 'block';
+      document.getElementById('qr-fallback-val').textContent = qrText;
     };
-    img.src = 'https://chart.googleapis.com/chart?chs=220x220&cht=qr&chl=' + encodedText + '&choe=UTF-8';
+    img.src = qrUrl;
 
-    // Store qrText for saveQRImage
+    // Store encoded data for saveQRImage
     window._currentQRText = qrText;
   }, 300);
 }
@@ -6302,11 +6294,11 @@ function generateQR() {
 function saveQRImage() {
   var canvas = document.getElementById('qr-canvas');
   var link = document.createElement('a');
-  link.download = 'SiteBook_Setup_QR_' + today().replace(/ /g,'-') + '.png';
-  // Use image/png with highest quality for better QR code readability
+  link.download = 'SiteBook_QR_' + today().replace(/ /g,'-') + '.png';
+  // Export at full canvas resolution (880x880) for maximum quality
   link.href = canvas.toDataURL('image/png');
   link.click();
-  toast('QR Image downloaded! Now: Settings → QR Image Upload చేయండి', 'ok');
+  toast('QR saved at high quality! Upload చేయండి.', 'ok');
 }
 
 function showQRScanner() {
@@ -6373,9 +6365,14 @@ function startQRDecode() {
     scanCtx.drawImage(video, 0, 0);
     var imageData = scanCtx.getImageData(0, 0, scanCanvas.width, scanCanvas.height);
     var code = jsQR(imageData.data, imageData.width, imageData.height);
-    if (code && code.data && code.data.startsWith('SITEBOOK:')) {
-      stopQRScan();
-      applyQRConfig(code.data);
+    if (code && code.data) {
+      try {
+        var decoded = JSON.parse(atob(code.data));
+        if (decoded.v && (decoded.s || decoded.k)) {
+          stopQRScan();
+          applyQRConfigFromEncoded(code.data);
+        }
+      } catch(e) {}
     }
   }, 500);
 }
@@ -6413,14 +6410,19 @@ function scanQRFromImage(e) {
       var code2 = jsQR(imageData2.data, imageData2.width, imageData2.height);
       if (code2 && code2.data) {
         var scannedData = code2.data.trim();
-        if (scannedData.startsWith('SITEBOOK:')) {
-          if (statusEl) { statusEl.textContent = '✅ QR found!'; statusEl.style.color = 'var(--teal)'; }
-          applyQRConfig(scannedData);
-        } else {
-          if (statusEl) { statusEl.textContent = '❌ Invalid QR: Expected SiteBook format. Got: ' + (scannedData.substring(0,20) || 'empty'); statusEl.style.color = 'var(--rose)'; }
+        try {
+          var decodedObj = JSON.parse(atob(scannedData));
+          if (decodedObj.v && (decodedObj.s || decodedObj.k)) {
+            if (statusEl) { statusEl.textContent = '✅ QR found!'; statusEl.style.color = 'var(--teal)'; }
+            applyQRConfigFromEncoded(scannedData);
+          } else {
+            if (statusEl) { statusEl.textContent = '❌ Invalid QR structure (missing config).'; statusEl.style.color = 'var(--rose)'; }
+          }
+        } catch(e) {
+          if (statusEl) { statusEl.textContent = '❌ QR decode failed: ' + e.message; statusEl.style.color = 'var(--rose)'; }
         }
       } else {
-        if (statusEl) { statusEl.textContent = '❌ QR code not detected. Image resolution quality check చేయండి.'; statusEl.style.color = 'var(--rose)'; }
+        if (statusEl) { statusEl.textContent = '❌ QR code not detected in image.'; statusEl.style.color = 'var(--rose)'; }
       }
     };
     img2.onerror = function(){
@@ -6447,22 +6449,35 @@ function applyQRConfig(qrText) {
   try {
     var encoded = qrText.replace('SITEBOOK:', '');
     var data = JSON.parse(atob(encoded));
-    if (data.s) cfg.sheetId   = data.s;
-    if (data.u) cfg.scriptUrl = data.u;
-    if (data.k) cfg.geminiKey = data.k;
-    if (data.ks && data.ks.length) {
-      cfg.apiKeys = data.ks.map(function(k){ return {key:k.k, label:k.l||'Key', addedDate:today()}; });
-      cfg.geminiKey = data.ks[0].k;
-    }
-    cfg.setupDone = true;
-    saveCfg();
-    closeModal('qr-modal');
-    updateSettingsUI();
-    toast('✓ Setup complete! All keys loaded from QR', 'ok');
-    setTimeout(function(){ launchApp(); }, 500);
+    applyQRData(data);
   } catch(e) {
     document.getElementById('qr-scan-status').textContent = 'Invalid QR code. SiteBook QR మాత్రమే scan చేయండి.';
   }
+}
+
+function applyQRConfigFromEncoded(encoded) {
+  try {
+    var data = JSON.parse(atob(encoded));
+    applyQRData(data);
+  } catch(e) {
+    document.getElementById('qr-scan-status').textContent = 'Invalid QR code. SiteBook QR మాత్రమే scan చేయండి.';
+  }
+}
+
+function applyQRData(data) {
+  if (data.s) cfg.sheetId   = data.s;
+  if (data.u) cfg.scriptUrl = data.u;
+  if (data.k) cfg.geminiKey = data.k;
+  if (data.ks && data.ks.length) {
+    cfg.apiKeys = data.ks.map(function(k){ return {key:k.k, label:k.l||'Key', addedDate:today()}; });
+    cfg.geminiKey = data.ks[0].k;
+  }
+  cfg.setupDone = true;
+  saveCfg();
+  closeModal('qr-modal');
+  updateSettingsUI();
+  toast('✓ Setup complete! All keys loaded from QR', 'ok');
+  setTimeout(function(){ launchApp(); }, 500);
 }
 
 // Also show scan QR on setup wizard for new phones
